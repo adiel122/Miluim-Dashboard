@@ -12,17 +12,18 @@ import { MyShiftsTab } from "./my-shifts-tab";
 import { ShiftBoardTab } from "./shift-board-tab";
 
 type ShabtzakShellProps = {
+  isLoggedIn: boolean;
   isAdmin: boolean;
 };
 
-export function ShabtzakShell({ isAdmin }: ShabtzakShellProps) {
+export function ShabtzakShell({ isLoggedIn, isAdmin }: ShabtzakShellProps) {
   const router = useRouter();
 
   const signOut = async () => {
     const supabase = createClient();
     await supabase.auth.signOut();
     router.refresh();
-    router.push("/login");
+    router.push("/");
   };
 
   return (
@@ -31,17 +32,36 @@ export function ShabtzakShell({ isAdmin }: ShabtzakShellProps) {
         <div className="mx-auto flex max-w-5xl flex-wrap items-center justify-between gap-3 px-4 py-3">
           <h1 className="text-lg font-semibold">שבצ״ק</h1>
           <div className="flex flex-wrap items-center gap-2">
-            {isAdmin && (
-              <Link
-                href="/admin"
-                className={buttonVariants({ variant: "secondary", size: "sm" })}
-              >
-                ניהול
-              </Link>
+            <Link href="/" className={buttonVariants({ variant: "ghost", size: "sm" })}>
+              דף הבית
+            </Link>
+            {isLoggedIn ? (
+              <>
+                {isAdmin && (
+                  <Link
+                    href="/admin"
+                    className={buttonVariants({ variant: "secondary", size: "sm" })}
+                  >
+                    ניהול
+                  </Link>
+                )}
+                <Button variant="ghost" size="sm" type="button" onClick={() => void signOut()}>
+                  יציאה
+                </Button>
+              </>
+            ) : (
+              <>
+                <Link
+                  href="/login?next=/shabtzak"
+                  className={buttonVariants({ variant: "secondary", size: "sm" })}
+                >
+                  התחבר
+                </Link>
+                <Link href="/register" className={buttonVariants({ variant: "outline", size: "sm" })}>
+                  הרשמה
+                </Link>
+              </>
             )}
-            <Button variant="ghost" size="sm" type="button" onClick={() => void signOut()}>
-              יציאה
-            </Button>
           </div>
         </div>
       </header>
@@ -60,7 +80,29 @@ export function ShabtzakShell({ isAdmin }: ShabtzakShellProps) {
             <ShiftBoardTab />
           </TabsContent>
           <TabsContent value="mine" className="mt-6 w-full min-w-0">
-            <MyShiftsTab />
+            {isLoggedIn ? (
+              <MyShiftsTab />
+            ) : (
+              <div className="space-y-4 py-10 text-center">
+                <p className="text-muted-foreground">
+                  התחבר כדי לראות משמרות ששובצת אליהן.
+                </p>
+                <div className="flex flex-wrap justify-center gap-2">
+                  <Link
+                    href="/login?next=/shabtzak"
+                    className={buttonVariants({ variant: "default", size: "sm" })}
+                  >
+                    התחבר
+                  </Link>
+                  <Link
+                    href="/register"
+                    className={buttonVariants({ variant: "outline", size: "sm" })}
+                  >
+                    הרשמה
+                  </Link>
+                </div>
+              </div>
+            )}
           </TabsContent>
         </Tabs>
       </main>

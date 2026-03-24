@@ -6,6 +6,7 @@
 -- בהתאם למדיניות RLS (לא כולם רואים הכל — אדמין מול חייל, וכו').
 --
 -- הרצה: Supabase Dashboard → SQL → New query → הדבק והרץ (פרויקט פרודקשן + אם יש סטייג‘).
+-- אם צריך שבצ״ק פתוח לכולם: אחרי הקובץ הזה הרץ גם supabase/rls_public_shabtzak_read.sql
 
 -- --- ביטול גישת anon ---
 REVOKE ALL ON TABLE public.profiles FROM anon;
