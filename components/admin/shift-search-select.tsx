@@ -69,8 +69,14 @@ export function ShiftSearchSelect({
     const el = wrapRef.current;
     if (!el) return;
     const r = el.getBoundingClientRect();
+    const pad = 4;
+    const maxPanel = Math.min(24 * 16, window.innerHeight * 0.72);
+    let top = r.bottom + pad;
+    if (top + maxPanel > window.innerHeight - 8) {
+      top = Math.max(8, r.top - maxPanel - pad);
+    }
     setPos({
-      top: r.bottom + 4,
+      top,
       left: r.left,
       width: r.width,
     });
@@ -124,10 +130,10 @@ export function ShiftSearchSelect({
           width: Math.max(pos.width, 220),
           zIndex: 10000,
         }}
-        className="flex max-h-[min(24rem,70vh)] flex-col overflow-hidden rounded-md border border-border bg-popover text-popover-foreground shadow-lg"
+        className="flex max-h-[min(24rem,72vh)] min-h-0 flex-col overflow-hidden rounded-md border border-border bg-popover text-popover-foreground shadow-lg"
         dir="rtl"
       >
-        <div className="border-b border-border p-2">
+        <div className="shrink-0 border-b border-border p-2">
           <Input
             placeholder="חיפוש תאריך, שעה, משימה…"
             value={query}
@@ -138,7 +144,7 @@ export function ShiftSearchSelect({
           />
         </div>
         <ul
-          className="min-h-[7rem] max-h-60 overflow-y-auto overscroll-contain p-1"
+          className="min-h-0 flex-1 basis-0 overflow-y-auto overscroll-contain p-1"
           role="listbox"
         >
           {shifts.length === 0 ? (
@@ -196,7 +202,10 @@ export function ShiftSearchSelect({
         className="h-auto min-h-9 w-full min-w-0 justify-between gap-2 px-2 py-1.5 font-normal"
         aria-expanded={open}
         aria-haspopup="listbox"
-        onClick={() => setOpen((o) => !o)}
+        onClick={() => {
+          if (!open) updatePos();
+          setOpen((o) => !o);
+        }}
       >
         <span className="min-w-0 flex-1 truncate text-right" dir="rtl">
           {displayText}
