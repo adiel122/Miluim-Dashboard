@@ -22,7 +22,7 @@ const NONE = "__none__";
 
 type ShiftOption = Pick<
   ShiftRow,
-  "id" | "shift_date" | "shift_type" | "mission_name" | "start_time"
+  "id" | "shift_date" | "shift_type" | "mission_name" | "start_time" | "team_count"
 >;
 
 type ShiftSearchSelectProps = {
@@ -36,7 +36,11 @@ type ShiftSearchSelectProps = {
 type PanelPos = { top: number; left: number; width: number };
 
 function shiftLine(s: ShiftOption) {
-  return `${formatDateDDMMYY(s.shift_date)} · ${formatTimeDisplay(s.start_time)} · ${SHIFT_TYPE_LABELS[s.shift_type]} · ${s.mission_name}`;
+  const teams =
+    typeof s.team_count === "number" && s.team_count > 0
+      ? ` · ${s.team_count} צוותים`
+      : "";
+  return `${formatDateDDMMYY(s.shift_date)} · ${formatTimeDisplay(s.start_time)} · ${SHIFT_TYPE_LABELS[s.shift_type]} · ${s.mission_name}${teams}`;
 }
 
 export function ShiftSearchSelect({

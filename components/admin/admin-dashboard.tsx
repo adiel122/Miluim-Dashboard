@@ -27,10 +27,15 @@ import {
 } from "@/components/ui/select";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { profilesForAssignmentMatrix } from "@/lib/shabtzak/profile-filters";
+import { parsePositionsInput, shiftRosterForDisplay } from "@/lib/shabtzak/shift-roster";
 import { isMissingRelationError } from "@/lib/supabase/relation-error";
 import type { ProfileRow, ShiftRow } from "@/lib/types/shabtzak";
 import { DEFAULT_ROSTER_POSITIONS, SHIFT_TYPE_LABELS } from "@/lib/types/shabtzak";
-import { shiftCreateSchema, type ShiftCreateValues } from "@/lib/validations/shift";
+import {
+  shiftCreateSchema,
+  type ShiftCreateFormInput,
+  type ShiftCreateValues,
+} from "@/lib/validations/shift";
 import { createClient } from "@/src/utils/supabase/client";
 
 const NONE = "__none__";
@@ -62,44 +67,19 @@ export function AdminDashboard() {
   const [constraintIds, setConstraintIds] = useState<Set<string>>(new Set());
   const [loadingMeta, setLoadingMeta] = useState(true);
 
-  const shiftForm = useForm({
+  const shiftForm = useForm<ShiftCreateFormInput>({
     resolver: zodResolver(shiftCreateSchema),
     defaultValues: {
       shift_date: "",
       shift_type: "day" as const,
       mission_name: "כוננות לאתרי הרס",
       start_time: "08:00",
+      team_count: 3,
+      positions_text: DEFAULT_ROSTER_POSITIONS.join(", "),
     },
   });
 
   const today = new Date().toISOString().slice(0, 10);
-
-  const teamIndices = useMemo(
-    () => Array.from({ length: roster.team_count }, (_, i) => i + 1),
-    [roster.team_count]
-  );
-
-  const duplicateProfileIds = useMemo(() => {
-    const counts = new Map<string, number>();
-    for (const team of teamIndices) {
-      for (const pos of roster.positions) {
-        const pid = matrix[matrixKey(team, pos)];
-        if (pid && pid !== NONE) {
-          counts.set(pid, (counts.get(pid) ?? 0) + 1);
-        }
-      }
-    }
-    return new Set(
-      Array.from(counts.entries())
-        .filter(([, n]) => n > 1)
-        .map(([id]) => id)
-    );
-  }, [matrix, roster.positions, teamIndices]);
-
-  const matrixProfileOptions = useMemo(
-    () => profilesForAssignmentMatrix(profiles, matrix, NONE),
-    [profiles, matrix]
-  );
 
   const loadRoster = useCallback(async () => {
     const supabase = createClient();
@@ -144,6 +124,8 @@ export function AdminDashboard() {
         shift_type,
         mission_name,
         start_time,
+        team_count,
+        positions,
         assignments ( profile_id, team_number, position )
       `
       )
@@ -175,6 +157,43 @@ export function AdminDashboard() {
   }, [refreshAll]);
 
   const selectedShift = shifts.find((s) => s.id === selectedShiftId);
+
+  const matrixLayout = useMemo(
+    () => shiftRosterForDisplay(selectedShift ?? null, roster),
+    [selectedShift, roster]
+  );
+
+  const teamIndices = useMemo(
+    () => Array.from({ length: matrixLayout.team_count }, (_, i) => i + 1),
+    [matrixLayout.team_count]
+  );
+
+  const duplicateProfileIds = useMemo(() => {
+    const counts = new Map<string, number>();
+    for (const team of teamIndices) {
+      for (const pos of matrixLayout.positions) {
+        const pid = matrix[matrixKey(team, pos)];
+        if (pid && pid !== NONE) {
+          counts.set(pid, (counts.get(pid) ?? 0) + 1);
+        }
+      }
+    }
+    return new Set(
+      Array.from(counts.entries())
+        .filter(([, n]) => n > 1)
+        .map(([id]) => id)
+    );
+  }, [matrix, matrixLayout.positions, teamIndices]);
+
+  const matrixProfileOptions = useMemo(
+    () => profilesForAssignmentMatrix(profiles, matrix, NONE),
+    [profiles, matrix]
+  );
+
+  useEffect(() => {
+    shiftForm.setValue("team_count", roster.team_count);
+    shiftForm.setValue("positions_text", roster.positions.join(", "));
+  }, [roster.team_count, roster.positions.join("|"), shiftForm]);
 
   useEffect(() => {
     if (!selectedShift) {
@@ -210,11 +229,14 @@ export function AdminDashboard() {
     const data = raw as ShiftCreateValues;
     const supabase = createClient();
     const time = data.start_time.length === 5 ? `${data.start_time}:00` : data.start_time;
+    const positions = parsePositionsInput(data.positions_text);
     const { error } = await supabase.from("shifts").insert({
       shift_date: data.shift_date,
       shift_type: data.shift_type,
       mission_name: data.mission_name.trim(),
       start_time: time,
+      team_count: data.team_count,
+      positions,
     });
     if (error) {
       toast.error(error.message);
@@ -226,6 +248,8 @@ export function AdminDashboard() {
       shift_type: "day",
       mission_name: "כוננות לאתרי הרס",
       start_time: "08:00",
+      team_count: roster.team_count,
+      positions_text: roster.positions.join(", "),
     });
     await loadShifts();
     await loadSummary();
@@ -259,7 +283,7 @@ export function AdminDashboard() {
     }[] = [];
 
     for (const team of teamIndices) {
-      for (const pos of roster.positions) {
+      for (const pos of matrixLayout.positions) {
         const pid = matrix[matrixKey(team, pos)];
         if (pid && pid !== NONE) {
           rows.push({
@@ -357,7 +381,10 @@ export function AdminDashboard() {
             <Card>
         <CardHeader>
           <CardTitle>יצירת משמרת</CardTitle>
-          <CardDescription>תאריך, סוג (יום / לילה), משימה ושעת התחלה</CardDescription>
+          <CardDescription>
+            לכל משימה ניתן להגדיר מספר צוותים ותפקידים שונים. ברירת המחדל נטענת מההגדרה הגלובלית
+            למעלה — ניתן לשנות לפני שמירה.
+          </CardDescription>
         </CardHeader>
         <CardContent>
           <form
@@ -409,6 +436,32 @@ export function AdminDashboard() {
                 </p>
               )}
             </div>
+            <div className="grid gap-2">
+              <Label htmlFor="ad-teams">מספר צוותים</Label>
+              <Input
+                id="ad-teams"
+                type="number"
+                min={1}
+                max={15}
+                dir="ltr"
+                className="text-left"
+                {...shiftForm.register("team_count", { valueAsNumber: true })}
+              />
+              {shiftForm.formState.errors.team_count && (
+                <p className="text-sm text-destructive">
+                  {shiftForm.formState.errors.team_count.message}
+                </p>
+              )}
+            </div>
+            <div className="grid gap-2 sm:col-span-2">
+              <Label htmlFor="ad-pos">תפקידים (מופרדים בפסיק או שורה)</Label>
+              <Input id="ad-pos" dir="rtl" {...shiftForm.register("positions_text")} />
+              {shiftForm.formState.errors.positions_text && (
+                <p className="text-sm text-destructive">
+                  {shiftForm.formState.errors.positions_text.message}
+                </p>
+              )}
+            </div>
             <div className="sm:col-span-2">
               <Button type="submit">שמירת משמרת</Button>
             </div>
@@ -420,7 +473,8 @@ export function AdminDashboard() {
         <CardHeader>
           <CardTitle>מטריצת שיבוצים</CardTitle>
           <CardDescription>
-            לפי מבנה הצוותים והתפקידים שהגדרת למעלה. כפילות חייל מסומנת באדום לפני שמירה
+            המבנה נלקח מהמשימה שנבחרה (צוותים ותפקידים שנשמרו בה). כפילות חייל מסומנת באדום לפני
+            שמירה
           </CardDescription>
         </CardHeader>
         <CardContent className="space-y-4 overflow-visible">
@@ -448,9 +502,9 @@ export function AdminDashboard() {
                 >
                   <p className="font-medium text-muted-foreground">צוות {team}</p>
                   <div
-                    className={cnGridForPositions(roster.positions.length)}
+                    className={cnGridForPositions(matrixLayout.positions.length)}
                   >
-                    {roster.positions.map((pos) => {
+                    {matrixLayout.positions.map((pos) => {
                       const key = matrixKey(team, pos);
                       const val = matrix[key] ?? NONE;
                       const conflict =

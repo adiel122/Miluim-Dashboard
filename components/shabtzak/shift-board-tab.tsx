@@ -9,6 +9,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { cn } from "@/lib/utils";
+import { shiftRosterForDisplay } from "@/lib/shabtzak/shift-roster";
 import type { AssignmentRow, ProfileRow, ShiftRow } from "@/lib/types/shabtzak";
 import { DEFAULT_ROSTER_POSITIONS, SHIFT_TYPE_LABELS } from "@/lib/types/shabtzak";
 import { formatDateDDMMYY, formatTimeDisplay } from "@/src/lib/date-format";
@@ -86,6 +87,8 @@ export function ShiftBoardTab() {
         shift_type,
         mission_name,
         start_time,
+        team_count,
+        positions,
         assignments (
           id,
           shift_id,
@@ -190,8 +193,9 @@ export function ShiftBoardTab() {
           <div className="flex w-full min-w-0 flex-col gap-6">
             {shifts.map((shift) => {
               const constrained = constraintMap[shift.shift_date] ?? new Set<string>();
-              const teams = teamsForShift(shift, roster.team_count);
-              const positions = positionsForShift(shift, roster.positions);
+              const layout = shiftRosterForDisplay(shift, roster);
+              const teams = teamsForShift(shift, layout.team_count);
+              const positions = positionsForShift(shift, layout.positions);
               return (
                 <Card
                   key={shift.id}

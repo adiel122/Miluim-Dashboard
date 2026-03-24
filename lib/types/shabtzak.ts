@@ -22,6 +22,9 @@ export type ShiftRow = {
   shift_type: ShiftType;
   mission_name: string;
   start_time: string;
+  /** אחרי מיגרציה shifts_team_positions.sql */
+  team_count?: number;
+  positions?: string[] | null;
 };
 
 export type AssignmentRow = {

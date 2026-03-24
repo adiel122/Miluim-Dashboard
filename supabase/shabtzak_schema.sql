@@ -78,6 +78,8 @@ create table if not exists public.shifts (
   unique (shift_date, shift_type, start_time)
 );
 
+-- מבנה צוותים לכל משמרת: הרץ supabase/shifts_team_positions.sql אחרי הקובץ הזה
+
 create index if not exists shifts_shift_date_idx on public.shifts (shift_date asc);
 
 -- --- assignments ---
