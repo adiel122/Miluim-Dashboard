@@ -27,10 +27,11 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
+import { ProfileSearchSelect } from "@/components/admin/profile-search-select";
+import { ShiftSearchSelect } from "@/components/admin/shift-search-select";
 import type { AssignmentPosition, ProfileRow, ShiftRow } from "@/lib/types/shabtzak";
 import { SHIFT_TYPE_LABELS } from "@/lib/types/shabtzak";
 import { shiftCreateSchema, type ShiftCreateValues } from "@/lib/validations/shift";
-import { formatDateDDMMYY, formatTimeDisplay } from "@/src/lib/date-format";
 import { createClient } from "@/src/utils/supabase/client";
 
 const POSITIONS: AssignmentPosition[] = ["מפקד", "נהג", "מחלץ"];
@@ -148,8 +149,12 @@ export function AdminDashboard() {
     })();
   }, [selectedShift]);
 
-  const profileLabel = (p: ProfileRow) =>
-    [p.first_name, p.last_name].filter(Boolean).join(" ") || p.id.slice(0, 8);
+  const profileLabel = useCallback((p: ProfileRow) => {
+    const name = [p.first_name, p.last_name].filter(Boolean).join(" ").trim();
+    if (name) return name;
+    if (p.military_id) return `חייל ${p.military_id}`;
+    return p.id.slice(0, 8);
+  }, []);
 
   const onCreateShift = shiftForm.handleSubmit(async (raw) => {
     const data = raw as ShiftCreateValues;
@@ -291,7 +296,11 @@ export function AdminDashboard() {
           <CardDescription>תאריך, סוג (יום / לילה), משימה ושעת התחלה</CardDescription>
         </CardHeader>
         <CardContent>
-          <form className="grid gap-4 sm:grid-cols-2" onSubmit={(e) => void onCreateShift(e)}>
+          <form
+            method="post"
+            className="grid gap-4 sm:grid-cols-2"
+            onSubmit={(e) => void onCreateShift(e)}
+          >
             <div className="grid gap-2 sm:col-span-2">
               <Label htmlFor="ad-date">תאריך</Label>
               <Input id="ad-date" type="date" dir="ltr" {...shiftForm.register("shift_date")} />
@@ -343,33 +352,19 @@ export function AdminDashboard() {
         </CardContent>
       </Card>
 
-      <Card>
+      <Card className="overflow-visible">
         <CardHeader>
           <CardTitle>מטריצת שיבוצים</CardTitle>
           <CardDescription>בחר משמרת, משבצים לפי צוות ותפקיד</CardDescription>
         </CardHeader>
-        <CardContent className="space-y-4">
-          <div className="grid gap-2">
+        <CardContent className="space-y-4 overflow-visible">
+          <div className="grid min-w-0 gap-2">
             <Label>משמרת</Label>
-            <Select
-              value={selectedShiftId || NONE}
-              onValueChange={(v) =>
-                setSelectedShiftId(v == null || v === NONE ? "" : v)
-              }
-            >
-              <SelectTrigger className="w-full justify-between">
-                <SelectValue placeholder="בחר משמרת" />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value={NONE}>—</SelectItem>
-                {shifts.map((s) => (
-                  <SelectItem key={s.id} value={s.id}>
-                    {formatDateDDMMYY(s.shift_date)} · {formatTimeDisplay(s.start_time)} ·{" "}
-                    {SHIFT_TYPE_LABELS[s.shift_type]} · {s.mission_name}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
+            <ShiftSearchSelect
+              shifts={shifts}
+              value={selectedShiftId}
+              onValueChange={setSelectedShiftId}
+            />
           </div>
 
           {selectedShift && (
@@ -377,14 +372,14 @@ export function AdminDashboard() {
               {TEAMS.map((team) => (
                 <div key={team} className="space-y-3 border-b border-border/40 pb-4 last:border-0 last:pb-0">
                   <p className="font-medium text-muted-foreground">צוות {team}</p>
-                  <div className="grid gap-3 sm:grid-cols-3">
+                  <div className="grid min-w-0 gap-3 sm:grid-cols-3">
                     {POSITIONS.map((pos) => {
                       const key = `${team}-${pos}` as MatrixKey;
                       const val = matrix[key] ?? NONE;
                       const conflict =
                         val !== NONE && constraintIds.has(val);
                       return (
-                        <div key={pos} className="grid gap-2">
+                        <div key={pos} className="grid min-w-0 gap-2">
                           <Label className="flex items-center justify-end gap-1.5 text-xs">
                             {pos}
                             {conflict && (
@@ -394,24 +389,14 @@ export function AdminDashboard() {
                               />
                             )}
                           </Label>
-                          <Select
+                          <ProfileSearchSelect
                             value={val}
                             onValueChange={(v) => setCell(team, pos, v)}
-                          >
-                            <SelectTrigger className="w-full justify-between text-right">
-                              <SelectValue />
-                            </SelectTrigger>
-                            <SelectContent>
-                              <SelectItem value={NONE}>ללא</SelectItem>
-                              {profiles.map((p) => (
-                                <SelectItem key={p.id} value={p.id}>
-                                  {constraintIds.has(p.id)
-                                    ? `${profileLabel(p)} (אילוץ)`
-                                    : profileLabel(p)}
-                                </SelectItem>
-                              ))}
-                            </SelectContent>
-                          </Select>
+                            profiles={profiles}
+                            noneValue={NONE}
+                            profileLabel={profileLabel}
+                            hasConstraint={(id) => constraintIds.has(id)}
+                          />
                         </div>
                       );
                     })}

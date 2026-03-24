@@ -5,6 +5,7 @@ import { AlertTriangleIcon } from "lucide-react";
 
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { cn } from "@/lib/utils";
 import type { AssignmentPosition, AssignmentRow, ProfileRow, ShiftRow } from "@/lib/types/shabtzak";
 import { SHIFT_TYPE_LABELS } from "@/lib/types/shabtzak";
 import { formatDateDDMMYY, formatTimeDisplay } from "@/src/lib/date-format";
@@ -123,23 +124,24 @@ export function ShiftBoardTab() {
   }
 
   return (
-    <div className="space-y-8">
+    <div className="w-full min-w-0 space-y-8">
       {grouped.map(([dateKey, dayShifts]) => (
-        <section key={dateKey} className="space-y-3">
+        <section key={dateKey} className="w-full min-w-0 space-y-4">
           <h2 className="text-lg font-semibold text-foreground">
             {formatDateDDMMYY(dateKey)}
           </h2>
-          <div className="flex flex-col gap-4">
+          <div className="flex w-full min-w-0 flex-col gap-6">
             {dayShifts.map((shift) => {
               const constrained = constraintMap[shift.shift_date] ?? new Set<string>();
               return (
                 <Card
                   key={shift.id}
-                  className={
+                  className={cn(
+                    "w-full min-w-0 overflow-hidden",
                     shift.shift_type === "day"
                       ? "border-blue-200/80 bg-blue-50/80"
                       : "border-orange-200/80 bg-orange-50/80"
-                  }
+                  )}
                 >
                   <CardHeader className="pb-2 text-right">
                     <CardTitle className="text-base font-semibold leading-snug">
@@ -152,57 +154,61 @@ export function ShiftBoardTab() {
                       </Badge>
                     </div>
                   </CardHeader>
-                  <CardContent className="space-y-3 text-right">
-                    {TEAMS.map((team) => (
-                      <div
-                        key={team}
-                        className="rounded-lg border border-border/60 bg-card/60 p-3"
-                      >
-                        <p className="mb-2 text-sm font-medium text-muted-foreground">
-                          צוות {team}
-                        </p>
-                        <ul className="space-y-1.5 text-sm">
-                          {POSITIONS.map((pos) => {
-                            const a = shift.assignments?.find(
-                              (x) => x.team_number === team && x.position === pos
-                            );
-                            const prof = a?.profiles;
-                            const name = prof
-                              ? [prof.first_name, prof.last_name].filter(Boolean).join(" ") ||
-                                "—"
-                              : "—";
-                            const conflict =
-                              prof && constrained.has(prof.id);
+                  <CardContent className="w-full min-w-0 text-right">
+                    <div className="grid w-full min-w-0 gap-3 sm:grid-cols-3">
+                      {TEAMS.map((team) => (
+                        <div
+                          key={team}
+                          className="min-w-0 rounded-lg border border-border/60 bg-card/60 p-3"
+                        >
+                          <p className="mb-3 text-sm font-medium text-muted-foreground">
+                            צוות {team}
+                          </p>
+                          <ul className="space-y-2 text-sm">
+                            {POSITIONS.map((pos) => {
+                              const a = shift.assignments?.find(
+                                (x) => x.team_number === team && x.position === pos
+                              );
+                              const prof = a?.profiles;
+                              const name = prof
+                                ? [prof.first_name, prof.last_name].filter(Boolean).join(" ") ||
+                                  "—"
+                                : "—";
+                              const conflict =
+                                prof && constrained.has(prof.id);
 
-                            return (
-                              <li
-                                key={`${team}-${pos}`}
-                                className="flex flex-wrap items-center justify-end gap-2"
-                              >
-                                <span className="text-muted-foreground">{pos}:</span>
-                                {prof ? (
-                                  <button
-                                    type="button"
-                                    className="inline-flex items-center gap-1 font-medium text-primary underline-offset-4 hover:underline"
-                                    onClick={() => openContact(prof)}
-                                  >
-                                    {conflict && (
-                                      <AlertTriangleIcon
-                                        className="size-4 shrink-0 text-destructive"
-                                        aria-label="אילוץ בתאריך זה"
-                                      />
+                              return (
+                                <li
+                                  key={`${team}-${pos}`}
+                                  className="flex flex-wrap items-baseline justify-end gap-x-2 gap-y-1 border-b border-border/30 pb-2 last:border-0 last:pb-0"
+                                >
+                                  <span className="shrink-0 text-muted-foreground">{pos}</span>
+                                  <span className="min-w-0 flex-1 break-words text-end font-medium">
+                                    {prof ? (
+                                      <button
+                                        type="button"
+                                        className="inline-flex items-center gap-1 text-primary underline-offset-4 hover:underline"
+                                        onClick={() => openContact(prof)}
+                                      >
+                                        {conflict && (
+                                          <AlertTriangleIcon
+                                            className="size-4 shrink-0 text-destructive"
+                                            aria-label="אילוץ בתאריך זה"
+                                          />
+                                        )}
+                                        {name}
+                                      </button>
+                                    ) : (
+                                      <span className="text-muted-foreground">—</span>
                                     )}
-                                    {name}
-                                  </button>
-                                ) : (
-                                  <span>{name}</span>
-                                )}
-                              </li>
-                            );
-                          })}
-                        </ul>
-                      </div>
-                    ))}
+                                  </span>
+                                </li>
+                              );
+                            })}
+                          </ul>
+                        </div>
+                      ))}
+                    </div>
                   </CardContent>
                 </Card>
               );

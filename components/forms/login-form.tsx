@@ -5,6 +5,7 @@ import { useRouter, useSearchParams } from "next/navigation";
 import { useState } from "react";
 import { toast } from "sonner";
 
+import { formatAuthFlowError } from "@/lib/supabase/errors";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
@@ -29,7 +30,7 @@ export function LoginForm() {
     });
     setLoading(false);
     if (error) {
-      toast.error(error.message);
+      toast.error(formatAuthFlowError(error));
       return;
     }
     router.refresh();
@@ -45,7 +46,7 @@ export function LoginForm() {
         redirectTo: `${origin}/auth/callback?next=${encodeURIComponent(nextPath)}`,
       },
     });
-    if (error) toast.error(error.message);
+    if (error) toast.error(formatAuthFlowError(error));
   };
 
   return (
@@ -54,9 +55,9 @@ export function LoginForm() {
         <CardTitle className="text-xl">התחברות</CardTitle>
         <CardDescription>אימייל או Google — אחרי ההתחברות נעבור לשבצ״ק.</CardDescription>
       </CardHeader>
-      <form onSubmit={signInEmail}>
-        <CardContent className="grid gap-4 text-right">
-          <div className="grid gap-2">
+      <form method="post" onSubmit={signInEmail}>
+        <CardContent className="grid gap-5 text-right">
+          <div className="flex flex-col gap-2">
             <Label htmlFor="login-email">מייל</Label>
             <Input
               id="login-email"
@@ -68,7 +69,7 @@ export function LoginForm() {
               required
             />
           </div>
-          <div className="grid gap-2">
+          <div className="flex flex-col gap-2">
             <Label htmlFor="login-password">סיסמה</Label>
             <Input
               id="login-password"

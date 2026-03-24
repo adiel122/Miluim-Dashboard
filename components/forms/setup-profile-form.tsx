@@ -97,14 +97,16 @@ export function SetupProfileForm() {
           יש למלא פרטים לפני כניסה לשבצ״ק. הפרטים נשמרים בפרופיל המילואים.
         </CardDescription>
       </CardHeader>
-      <form onSubmit={onSubmit} noValidate>
-        <CardContent className="grid gap-4 text-right">
-          <fieldset className="grid gap-3 rounded-lg border border-border/60 p-4">
-            <legend className="text-sm font-medium text-muted-foreground">
-              פרטים אישיים
-            </legend>
-            <div className="grid gap-2 sm:grid-cols-2 sm:gap-3">
-              <div className="grid gap-2">
+      <form method="post" onSubmit={onSubmit} noValidate>
+        <CardContent className="grid gap-5 text-right">
+          <div
+            role="group"
+            aria-label="פרטים אישיים"
+            className="grid gap-4 rounded-lg border border-border/60 bg-muted/20 p-4"
+          >
+            <p className="text-sm font-medium text-muted-foreground">פרטים אישיים</p>
+            <div className="grid gap-4 sm:grid-cols-2 sm:gap-x-4 sm:gap-y-4">
+              <div className="flex flex-col gap-2">
                 <Label htmlFor="sp-first_name">שם</Label>
                 <Input
                   id="sp-first_name"
@@ -116,7 +118,7 @@ export function SetupProfileForm() {
                   <p className="text-sm text-destructive">{errors.first_name.message}</p>
                 )}
               </div>
-              <div className="grid gap-2">
+              <div className="flex flex-col gap-2">
                 <Label htmlFor="sp-last_name">שם משפחה</Label>
                 <Input
                   id="sp-last_name"
@@ -129,8 +131,8 @@ export function SetupProfileForm() {
                 )}
               </div>
             </div>
-            <div className="grid gap-2 sm:grid-cols-2 sm:gap-3">
-              <div className="grid gap-2">
+            <div className="grid gap-4 sm:grid-cols-2 sm:gap-x-4 sm:gap-y-4">
+              <div className="flex flex-col gap-2">
                 <Label htmlFor="sp-military_id">מספר אישי</Label>
                 <Input
                   id="sp-military_id"
@@ -144,7 +146,7 @@ export function SetupProfileForm() {
                   <p className="text-sm text-destructive">{errors.military_id.message}</p>
                 )}
               </div>
-              <div className="grid gap-2">
+              <div className="flex flex-col gap-2">
                 <Label htmlFor="sp-phone">טלפון</Label>
                 <Input
                   id="sp-phone"
@@ -159,8 +161,8 @@ export function SetupProfileForm() {
                 )}
               </div>
             </div>
-            <div className="grid gap-2 sm:grid-cols-2 sm:gap-3">
-              <div className="grid gap-2">
+            <div className="grid gap-4 sm:grid-cols-2 sm:gap-x-4 sm:gap-y-4">
+              <div className="flex flex-col gap-2">
                 <Label htmlFor="sp-rank">דרגה</Label>
                 <Controller
                   name="rank"
@@ -170,7 +172,10 @@ export function SetupProfileForm() {
                       value={field.value ?? null}
                       onValueChange={(v) => field.onChange(v ?? undefined)}
                     >
-                      <SelectTrigger id="sp-rank" className="h-9 w-full justify-between">
+                      <SelectTrigger
+                        id="sp-rank"
+                        className="h-10 w-full justify-between md:h-9"
+                      >
                         <SelectValue placeholder="בחר דרגה" />
                       </SelectTrigger>
                       <SelectContent>
@@ -187,7 +192,7 @@ export function SetupProfileForm() {
                   <p className="text-sm text-destructive">{errors.rank.message}</p>
                 )}
               </div>
-              <div className="grid gap-2">
+              <div className="flex flex-col gap-2">
                 <Label htmlFor="sp-role_description">תפקיד (תיאור)</Label>
                 <Input
                   id="sp-role_description"
@@ -206,7 +211,7 @@ export function SetupProfileForm() {
                 )}
               </div>
             </div>
-          </fieldset>
+          </div>
         </CardContent>
         <CardFooter className="flex flex-wrap justify-between gap-3 border-t border-border/60 pt-4">
           <Link href="/login" className="text-sm text-muted-foreground hover:text-foreground">

@@ -80,14 +80,16 @@ export function ListingSubmissionForm({ onValidSubmit }: ListingSubmissionFormPr
           פרטי פרופיל ומודעה. לאחר האישור יופיעו בלוח.
         </CardDescription>
       </CardHeader>
-      <form onSubmit={onSubmit} noValidate>
-        <CardContent className="grid gap-4 text-right">
-          <fieldset className="grid gap-3 rounded-lg border border-border/60 p-4">
-            <legend className="text-sm font-medium text-muted-foreground">
-              פרטים אישיים
-            </legend>
-            <div className="grid gap-2 sm:grid-cols-2 sm:gap-3">
-              <div className="grid gap-2">
+      <form method="post" onSubmit={onSubmit} noValidate>
+        <CardContent className="grid gap-5 text-right">
+          <div
+            role="group"
+            aria-label="פרטים אישיים"
+            className="grid gap-4 rounded-lg border border-border/60 bg-muted/20 p-4"
+          >
+            <p className="text-sm font-medium text-muted-foreground">פרטים אישיים</p>
+            <div className="grid gap-4 sm:grid-cols-2 sm:gap-x-4 sm:gap-y-4">
+              <div className="flex flex-col gap-2">
                 <Label htmlFor="first_name">שם</Label>
                 <Input
                   id="first_name"
@@ -100,7 +102,7 @@ export function ListingSubmissionForm({ onValidSubmit }: ListingSubmissionFormPr
                   <p className="text-sm text-destructive">{errors.first_name.message}</p>
                 )}
               </div>
-              <div className="grid gap-2">
+              <div className="flex flex-col gap-2">
                 <Label htmlFor="last_name">שם משפחה</Label>
                 <Input
                   id="last_name"
@@ -114,8 +116,8 @@ export function ListingSubmissionForm({ onValidSubmit }: ListingSubmissionFormPr
                 )}
               </div>
             </div>
-            <div className="grid gap-2 sm:grid-cols-2 sm:gap-3">
-              <div className="grid gap-2">
+            <div className="grid gap-4 sm:grid-cols-2 sm:gap-x-4 sm:gap-y-4">
+              <div className="flex flex-col gap-2">
                 <Label htmlFor="military_id">מספר אישי</Label>
                 <Input
                   id="military_id"
@@ -130,7 +132,7 @@ export function ListingSubmissionForm({ onValidSubmit }: ListingSubmissionFormPr
                   <p className="text-sm text-destructive">{errors.military_id.message}</p>
                 )}
               </div>
-              <div className="grid gap-2">
+              <div className="flex flex-col gap-2">
                 <Label htmlFor="phone">טלפון</Label>
                 <Input
                   id="phone"
@@ -146,8 +148,8 @@ export function ListingSubmissionForm({ onValidSubmit }: ListingSubmissionFormPr
                 )}
               </div>
             </div>
-            <div className="grid gap-2 sm:grid-cols-2 sm:gap-3">
-              <div className="grid gap-2">
+            <div className="grid gap-4 sm:grid-cols-2 sm:gap-x-4 sm:gap-y-4">
+              <div className="flex flex-col gap-2">
                 <Label htmlFor="rank">דרגה</Label>
                 <Controller
                   name="rank"
@@ -161,7 +163,7 @@ export function ListingSubmissionForm({ onValidSubmit }: ListingSubmissionFormPr
                       <SelectTrigger
                         id="rank"
                         size="default"
-                        className="h-8 w-full min-w-0 justify-between"
+                        className="h-10 w-full min-w-0 justify-between md:h-9"
                         aria-invalid={!!errors.rank}
                       >
                         <SelectValue placeholder="בחר דרגה" />
@@ -180,7 +182,7 @@ export function ListingSubmissionForm({ onValidSubmit }: ListingSubmissionFormPr
                   <p className="text-sm text-destructive">{errors.rank.message}</p>
                 )}
               </div>
-              <div className="grid gap-2">
+              <div className="flex flex-col gap-2">
                 <Label htmlFor="military_role">תפקיד (לא משימתי)</Label>
                 <Input
                   id="military_role"
@@ -203,13 +205,15 @@ export function ListingSubmissionForm({ onValidSubmit }: ListingSubmissionFormPr
                 )}
               </div>
             </div>
-          </fieldset>
+          </div>
 
-          <fieldset className="grid gap-3 rounded-lg border border-border/60 p-4">
-            <legend className="text-sm font-medium text-muted-foreground">
-              המודעה
-            </legend>
-            <div className="grid gap-2">
+          <div
+            role="group"
+            aria-label="המודעה"
+            className="grid gap-4 rounded-lg border border-border/60 bg-muted/20 p-4"
+          >
+            <p className="text-sm font-medium text-muted-foreground">המודעה</p>
+            <div className="flex flex-col gap-2">
               <Label htmlFor="title">כותרת</Label>
               <Input
                 id="title"
@@ -221,7 +225,7 @@ export function ListingSubmissionForm({ onValidSubmit }: ListingSubmissionFormPr
                 <p className="text-sm text-destructive">{errors.title.message}</p>
               )}
             </div>
-            <div className="grid gap-2">
+            <div className="flex flex-col gap-2">
               <Label htmlFor="description">תיאור (אופציונלי)</Label>
               <Textarea
                 id="description"
@@ -235,8 +239,8 @@ export function ListingSubmissionForm({ onValidSubmit }: ListingSubmissionFormPr
                 <p className="text-sm text-destructive">{errors.description.message}</p>
               )}
             </div>
-            <div className="grid gap-2 sm:grid-cols-2 sm:gap-3">
-              <div className="grid gap-2">
+            <div className="grid gap-4 sm:grid-cols-2 sm:gap-x-4 sm:gap-y-4">
+              <div className="flex flex-col gap-2">
                 <Label htmlFor="rank_required">דרגה נדרשת (במודעה)</Label>
                 <Input
                   id="rank_required"
@@ -251,7 +255,7 @@ export function ListingSubmissionForm({ onValidSubmit }: ListingSubmissionFormPr
                   </p>
                 )}
               </div>
-              <div className="grid gap-2">
+              <div className="flex flex-col gap-2">
                 <Label htmlFor="profession">מקצוע / התמחות במודעה</Label>
                 <Input
                   id="profession"
@@ -264,7 +268,7 @@ export function ListingSubmissionForm({ onValidSubmit }: ListingSubmissionFormPr
                 )}
               </div>
             </div>
-            <div className="grid gap-2">
+            <div className="flex flex-col gap-2">
               <Label htmlFor="location">מיקום</Label>
               <Input
                 id="location"
@@ -276,7 +280,7 @@ export function ListingSubmissionForm({ onValidSubmit }: ListingSubmissionFormPr
                 <p className="text-sm text-destructive">{errors.location.message}</p>
               )}
             </div>
-          </fieldset>
+          </div>
         </CardContent>
         <CardFooter className="flex justify-start border-t border-border/60 pt-4">
           <Button type="submit" disabled={isSubmitting} className="min-w-28">

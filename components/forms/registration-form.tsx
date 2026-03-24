@@ -2,6 +2,7 @@
 
 import { zodResolver } from "@hookform/resolvers/zod";
 import Link from "next/link";
+import { useEffect } from "react";
 import { useForm, Controller } from "react-hook-form";
 import { toast } from "sonner";
 
@@ -24,6 +25,7 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { IDF_RANKS, MILITARY_ROLE_SUGGESTIONS } from "@/lib/constants/idf-ranks";
+import { formatAuthFlowError } from "@/lib/supabase/errors";
 import {
   registrationSchema,
   type RegistrationFormValues,
@@ -38,10 +40,21 @@ const defaultValues: Partial<RegistrationFormValues> = {
   last_name: "",
   military_id: "",
   phone: "",
+  rank: undefined,
   role_description: "",
 };
 
 export function RegistrationForm() {
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+    const sp = new URLSearchParams(window.location.search);
+    if (!sp.has("password")) return;
+    window.history.replaceState({}, "", window.location.pathname);
+    toast.error(
+      "הסיסמה הופיעה בכתובת (שליחת טופס בלי JS). כנראה קבצי Next לא נטענו — מחק תיקיית .next, עצור והרץ שוב npm run dev, וודא שאתה על אותו פורט. מומלץ להחליף סיסמה."
+    );
+  }, []);
+
   const form = useForm<RegistrationFormValues>({
     resolver: zodResolver(registrationSchema),
     defaultValues,
@@ -81,7 +94,7 @@ export function RegistrationForm() {
     });
 
     if (signUpError) {
-      toast.error(signUpError.message);
+      toast.error(formatAuthFlowError(signUpError));
       return;
     }
 
@@ -118,10 +131,10 @@ export function RegistrationForm() {
           </Link>
         </CardDescription>
       </CardHeader>
-      <form onSubmit={onSubmit} noValidate>
-        <CardContent className="grid gap-4 text-right">
-          <div className="grid gap-2 sm:grid-cols-2 sm:gap-3">
-            <div className="grid gap-2 sm:col-span-2">
+      <form method="post" onSubmit={onSubmit} noValidate>
+        <CardContent className="grid gap-5 text-right">
+          <div className="grid gap-4 sm:grid-cols-2 sm:gap-x-4 sm:gap-y-4">
+            <div className="flex flex-col gap-2 sm:col-span-2">
               <Label htmlFor="reg-email">מייל</Label>
               <Input
                 id="reg-email"
@@ -135,7 +148,7 @@ export function RegistrationForm() {
                 <p className="text-sm text-destructive">{errors.email.message}</p>
               )}
             </div>
-            <div className="grid gap-2 sm:col-span-2">
+            <div className="flex flex-col gap-2 sm:col-span-2">
               <Label htmlFor="reg-password">סיסמה</Label>
               <Input
                 id="reg-password"
@@ -151,12 +164,14 @@ export function RegistrationForm() {
             </div>
           </div>
 
-          <fieldset className="grid gap-3 rounded-lg border border-border/60 p-4">
-            <legend className="text-sm font-medium text-muted-foreground">
-              פרטים אישיים
-            </legend>
-            <div className="grid gap-2 sm:grid-cols-2 sm:gap-3">
-              <div className="grid gap-2">
+          <div
+            role="group"
+            aria-label="פרטים אישיים"
+            className="grid gap-4 rounded-lg border border-border/60 bg-muted/20 p-4"
+          >
+            <p className="text-sm font-medium text-muted-foreground">פרטים אישיים</p>
+            <div className="grid gap-4 sm:grid-cols-2 sm:gap-x-4 sm:gap-y-4">
+              <div className="flex flex-col gap-2">
                 <Label htmlFor="reg-first_name">שם</Label>
                 <Input
                   id="reg-first_name"
@@ -169,7 +184,7 @@ export function RegistrationForm() {
                   <p className="text-sm text-destructive">{errors.first_name.message}</p>
                 )}
               </div>
-              <div className="grid gap-2">
+              <div className="flex flex-col gap-2">
                 <Label htmlFor="reg-last_name">שם משפחה</Label>
                 <Input
                   id="reg-last_name"
@@ -183,8 +198,8 @@ export function RegistrationForm() {
                 )}
               </div>
             </div>
-            <div className="grid gap-2 sm:grid-cols-2 sm:gap-3">
-              <div className="grid gap-2">
+            <div className="grid gap-4 sm:grid-cols-2 sm:gap-x-4 sm:gap-y-4">
+              <div className="flex flex-col gap-2">
                 <Label htmlFor="reg-military_id">מספר אישי</Label>
                 <Input
                   id="reg-military_id"
@@ -198,7 +213,7 @@ export function RegistrationForm() {
                   <p className="text-sm text-destructive">{errors.military_id.message}</p>
                 )}
               </div>
-              <div className="grid gap-2">
+              <div className="flex flex-col gap-2">
                 <Label htmlFor="reg-phone">טלפון</Label>
                 <Input
                   id="reg-phone"
@@ -213,8 +228,8 @@ export function RegistrationForm() {
                 )}
               </div>
             </div>
-            <div className="grid gap-2 sm:grid-cols-2 sm:gap-3">
-              <div className="grid gap-2">
+            <div className="grid gap-4 sm:grid-cols-2 sm:gap-x-4 sm:gap-y-4">
+              <div className="flex flex-col gap-2">
                 <Label htmlFor="reg-rank">דרגה</Label>
                 <Controller
                   name="rank"
@@ -227,7 +242,7 @@ export function RegistrationForm() {
                       <SelectTrigger
                         id="reg-rank"
                         size="default"
-                        className="h-8 w-full min-w-0 justify-between"
+                        className="h-10 w-full min-w-0 justify-between md:h-9"
                         aria-invalid={!!errors.rank}
                       >
                         <SelectValue placeholder="בחר דרגה" />
@@ -246,7 +261,7 @@ export function RegistrationForm() {
                   <p className="text-sm text-destructive">{errors.rank.message}</p>
                 )}
               </div>
-              <div className="grid gap-2">
+              <div className="flex flex-col gap-2">
                 <Label htmlFor="reg-role_description">תפקיד (לא משימתי)</Label>
                 <Input
                   id="reg-role_description"
@@ -268,7 +283,7 @@ export function RegistrationForm() {
                 )}
               </div>
             </div>
-          </fieldset>
+          </div>
         </CardContent>
         <CardFooter className="flex flex-wrap items-center justify-between gap-3 border-t border-border/60 pt-4">
           <Link

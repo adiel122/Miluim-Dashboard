@@ -15,7 +15,7 @@ function LoginFormFallback() {
 
 export default function LoginPage() {
   return (
-    <div className="min-h-screen bg-background px-4 py-12 text-right">
+    <div className="min-h-screen bg-background px-4 py-12 text-right" dir="rtl">
       <div className="mx-auto flex max-w-lg flex-col items-stretch gap-6">
         <Suspense fallback={<LoginFormFallback />}>
           <LoginForm />

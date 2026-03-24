@@ -29,7 +29,7 @@ export function ShabtzakShell({ isAdmin }: ShabtzakShellProps) {
   return (
     <div className="min-h-screen bg-background">
       <header className="sticky top-0 z-40 border-b border-border/80 bg-card/90 backdrop-blur-sm">
-        <div className="mx-auto flex max-w-3xl flex-wrap items-center justify-between gap-3 px-4 py-3">
+        <div className="mx-auto flex max-w-5xl flex-wrap items-center justify-between gap-3 px-4 py-3">
           <h1 className="text-lg font-semibold">שבצ״ק</h1>
           <div className="flex flex-wrap items-center gap-2">
             {isAdmin && (
@@ -47,8 +47,8 @@ export function ShabtzakShell({ isAdmin }: ShabtzakShellProps) {
         </div>
       </header>
 
-      <main className="mx-auto max-w-3xl px-4 py-6">
-        <Tabs defaultValue="board" className="w-full">
+      <main className="mx-auto w-full max-w-5xl px-4 py-6">
+        <Tabs defaultValue="board" className="w-full min-w-0">
           <TabsList className="grid h-auto w-full grid-cols-3 gap-1 p-1">
             <TabsTrigger value="board" className="text-xs sm:text-sm">
               שבצ״ק
@@ -60,13 +60,13 @@ export function ShabtzakShell({ isAdmin }: ShabtzakShellProps) {
               אילוצים
             </TabsTrigger>
           </TabsList>
-          <TabsContent value="board" className="mt-6">
+          <TabsContent value="board" className="mt-6 w-full min-w-0">
             <ShiftBoardTab />
           </TabsContent>
-          <TabsContent value="mine" className="mt-6">
+          <TabsContent value="mine" className="mt-6 w-full min-w-0">
             <MyShiftsTab />
           </TabsContent>
-          <TabsContent value="constraints" className="mt-6">
+          <TabsContent value="constraints" className="mt-6 w-full min-w-0">
             <ConstraintsTab />
           </TabsContent>
         </Tabs>
