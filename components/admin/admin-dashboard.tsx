@@ -2,7 +2,7 @@
 
 import { zodResolver } from "@hookform/resolvers/zod";
 import Link from "next/link";
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useForm } from "react-hook-form";
 import { AlertTriangleIcon } from "lucide-react";
 import { toast } from "sonner";
@@ -27,8 +27,13 @@ import {
 } from "@/components/ui/select";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { profilesForAssignmentMatrix } from "@/lib/shabtzak/profile-filters";
-import { parsePositionsInput, shiftRosterForDisplay } from "@/lib/shabtzak/shift-roster";
+import {
+  layoutFromFormFields,
+  parsePositionsInput,
+  shiftRosterForDisplay,
+} from "@/lib/shabtzak/shift-roster";
 import { isMissingRelationError } from "@/lib/supabase/relation-error";
+import { timeInputValue } from "@/src/lib/date-format";
 import type { ProfileRow, ShiftRow } from "@/lib/types/shabtzak";
 import { DEFAULT_ROSTER_POSITIONS, SHIFT_TYPE_LABELS } from "@/lib/types/shabtzak";
 import {
@@ -49,6 +54,15 @@ type RosterState = {
   positions: string[];
 };
 
+type ShiftEditMeta = {
+  shift_date: string;
+  shift_type: "day" | "night";
+  start_time: string;
+  mission_name: string;
+  team_count: number;
+  positions_text: string;
+};
+
 function matrixKey(team: number, pos: string) {
   return `${team}-${pos}`;
 }
@@ -65,7 +79,13 @@ export function AdminDashboard() {
   const [selectedShiftId, setSelectedShiftId] = useState<string>("");
   const [matrix, setMatrix] = useState<Record<string, string | undefined>>({});
   const [constraintIds, setConstraintIds] = useState<Set<string>>(new Set());
+  const [createMatrix, setCreateMatrix] = useState<Record<string, string | undefined>>({});
+  const [createConstraintIds, setCreateConstraintIds] = useState<Set<string>>(new Set());
+  const [editMeta, setEditMeta] = useState<ShiftEditMeta | null>(null);
   const [loadingMeta, setLoadingMeta] = useState(true);
+
+  const shiftsRef = useRef(shifts);
+  shiftsRef.current = shifts;
 
   const shiftForm = useForm<ShiftCreateFormInput>({
     resolver: zodResolver(shiftCreateSchema),
@@ -158,6 +178,55 @@ export function AdminDashboard() {
 
   const selectedShift = shifts.find((s) => s.id === selectedShiftId);
 
+  const wCreateTeam = shiftForm.watch("team_count");
+  const wCreatePos = shiftForm.watch("positions_text");
+  const wCreateDate = shiftForm.watch("shift_date");
+
+  const createLayout = useMemo(
+    () => layoutFromFormFields(wCreateTeam, wCreatePos ?? "", roster),
+    [wCreateTeam, wCreatePos, roster]
+  );
+
+  const createTeamIndices = useMemo(
+    () => Array.from({ length: createLayout.team_count }, (_, i) => i + 1),
+    [createLayout.team_count]
+  );
+
+  const createDuplicateProfileIds = useMemo(() => {
+    const counts = new Map<string, number>();
+    for (const team of createTeamIndices) {
+      for (const pos of createLayout.positions) {
+        const pid = createMatrix[matrixKey(team, pos)];
+        if (pid && pid !== NONE) {
+          counts.set(pid, (counts.get(pid) ?? 0) + 1);
+        }
+      }
+    }
+    return new Set(
+      Array.from(counts.entries())
+        .filter(([, n]) => n > 1)
+        .map(([id]) => id)
+    );
+  }, [createMatrix, createLayout.positions, createTeamIndices]);
+
+  const createMatrixProfileOptions = useMemo(
+    () => profilesForAssignmentMatrix(profiles, createMatrix, NONE),
+    [profiles, createMatrix]
+  );
+
+  const shiftEditSyncKey = useMemo(() => {
+    if (!selectedShift) return "";
+    return [
+      selectedShift.id,
+      selectedShift.shift_date,
+      selectedShift.shift_type,
+      selectedShift.start_time,
+      selectedShift.mission_name,
+      selectedShift.team_count,
+      (selectedShift.positions ?? []).join("\0"),
+    ].join("|");
+  }, [selectedShift]);
+
   const matrixLayout = useMemo(
     () => shiftRosterForDisplay(selectedShift ?? null, roster),
     [selectedShift, roster]
@@ -191,9 +260,66 @@ export function AdminDashboard() {
   );
 
   useEffect(() => {
+    if (shiftForm.formState.isDirty) return;
     shiftForm.setValue("team_count", roster.team_count);
     shiftForm.setValue("positions_text", roster.positions.join(", "));
-  }, [roster.team_count, roster.positions.join("|"), shiftForm]);
+  }, [roster.team_count, roster.positions.join("|"), shiftForm, shiftForm.formState.isDirty]);
+
+  useEffect(() => {
+    const valid = new Set<string>();
+    for (let team = 1; team <= createLayout.team_count; team++) {
+      for (const pos of createLayout.positions) {
+        valid.add(matrixKey(team, pos));
+      }
+    }
+    setCreateMatrix((prev) => {
+      let changed = false;
+      const next = { ...prev };
+      for (const k of Object.keys(next)) {
+        if (!valid.has(k)) {
+          delete next[k];
+          changed = true;
+        }
+      }
+      return changed ? next : prev;
+    });
+  }, [createLayout.team_count, createLayout.positions.join("|")]);
+
+  useEffect(() => {
+    if (!wCreateDate) {
+      setCreateConstraintIds(new Set());
+      return;
+    }
+    void (async () => {
+      const supabase = createClient();
+      const { data } = await supabase
+        .from("profile_constraints")
+        .select("profile_id")
+        .eq("constraint_date", wCreateDate);
+      setCreateConstraintIds(new Set((data ?? []).map((c) => c.profile_id as string)));
+    })();
+  }, [wCreateDate]);
+
+  useEffect(() => {
+    if (!selectedShiftId || !shiftEditSyncKey) {
+      setEditMeta(null);
+      return;
+    }
+    const s = shiftsRef.current.find((x) => x.id === selectedShiftId);
+    if (!s) {
+      setEditMeta(null);
+      return;
+    }
+    const pos = s.positions?.length ? s.positions : [...DEFAULT_ROSTER_POSITIONS];
+    setEditMeta({
+      shift_date: s.shift_date,
+      shift_type: s.shift_type,
+      mission_name: s.mission_name,
+      start_time: timeInputValue(String(s.start_time)),
+      team_count: s.team_count ?? 3,
+      positions_text: pos.join(", "),
+    });
+  }, [shiftEditSyncKey, selectedShiftId]);
 
   useEffect(() => {
     if (!selectedShift) {
@@ -227,22 +353,61 @@ export function AdminDashboard() {
 
   const onCreateShift = shiftForm.handleSubmit(async (raw) => {
     const data = raw as ShiftCreateValues;
+    if (createDuplicateProfileIds.size > 0) {
+      toast.error("אותו חייל מסומן ביותר ממשבצת אחת — תקן לפני שמירה");
+      return;
+    }
     const supabase = createClient();
     const time = data.start_time.length === 5 ? `${data.start_time}:00` : data.start_time;
     const positions = parsePositionsInput(data.positions_text);
-    const { error } = await supabase.from("shifts").insert({
-      shift_date: data.shift_date,
-      shift_type: data.shift_type,
-      mission_name: data.mission_name.trim(),
-      start_time: time,
-      team_count: data.team_count,
-      positions,
-    });
-    if (error) {
-      toast.error(error.message);
+    const { data: inserted, error } = await supabase
+      .from("shifts")
+      .insert({
+        shift_date: data.shift_date,
+        shift_type: data.shift_type,
+        mission_name: data.mission_name.trim(),
+        start_time: time,
+        team_count: data.team_count,
+        positions,
+      })
+      .select("id")
+      .single();
+    if (error || !inserted?.id) {
+      toast.error(error?.message ?? "שגיאה בשמירת משמרת");
       return;
     }
-    toast.success("משמרת נוספה");
+
+    const assignRows: {
+      shift_id: string;
+      profile_id: string;
+      team_number: number;
+      position: string;
+    }[] = [];
+    for (let team = 1; team <= data.team_count; team++) {
+      for (const pos of positions) {
+        const pid = createMatrix[matrixKey(team, pos)];
+        if (pid && pid !== NONE) {
+          assignRows.push({
+            shift_id: inserted.id,
+            profile_id: pid,
+            team_number: team,
+            position: pos.trim(),
+          });
+        }
+      }
+    }
+
+    if (assignRows.length > 0) {
+      const { error: aErr } = await supabase.from("assignments").insert(assignRows);
+      if (aErr) {
+        await supabase.from("shifts").delete().eq("id", inserted.id);
+        toast.error(aErr.message);
+        return;
+      }
+    }
+
+    toast.success("משמרת נוספה עם שיבוצים");
+    setCreateMatrix({});
     shiftForm.reset({
       shift_date: "",
       shift_type: "day",
@@ -254,6 +419,53 @@ export function AdminDashboard() {
     await loadShifts();
     await loadSummary();
   });
+
+  const saveShiftMetadata = async () => {
+    if (!selectedShift || !editMeta) {
+      toast.error("בחר משמרת");
+      return;
+    }
+    const positions = parsePositionsInput(editMeta.positions_text);
+    if (positions.length === 0) {
+      toast.error("לפחות תפקיד אחד תקין");
+      return;
+    }
+    const tc = Math.min(15, Math.max(1, Math.floor(Number(editMeta.team_count)) || 3));
+    const time =
+      editMeta.start_time.length === 5 ? `${editMeta.start_time}:00` : editMeta.start_time;
+    const supabase = createClient();
+    const { error } = await supabase
+      .from("shifts")
+      .update({
+        shift_date: editMeta.shift_date,
+        shift_type: editMeta.shift_type,
+        mission_name: editMeta.mission_name.trim(),
+        start_time: time,
+        team_count: tc,
+        positions,
+      })
+      .eq("id", selectedShift.id);
+    if (error) {
+      toast.error(error.message);
+      return;
+    }
+
+    const posSet = new Set(positions);
+    const { data: assigns } = await supabase
+      .from("assignments")
+      .select("id, team_number, position")
+      .eq("shift_id", selectedShift.id);
+    const orphanIds = (assigns ?? [])
+      .filter((a) => a.team_number > tc || !posSet.has(a.position))
+      .map((a) => a.id as string);
+    if (orphanIds.length > 0) {
+      await supabase.from("assignments").delete().in("id", orphanIds);
+    }
+
+    toast.success("פרטי המשמרת עודכנו");
+    await loadShifts();
+    await loadSummary();
+  };
 
   const saveMatrix = async () => {
     if (!selectedShiftId) {
@@ -314,6 +526,13 @@ export function AdminDashboard() {
     const v =
       profileId == null || profileId === NONE ? undefined : profileId;
     setMatrix((prev) => ({ ...prev, [key]: v }));
+  };
+
+  const setCreateCell = (team: number, pos: string, profileId: string | null | undefined) => {
+    const key = matrixKey(team, pos);
+    const v =
+      profileId == null || profileId === NONE ? undefined : profileId;
+    setCreateMatrix((prev) => ({ ...prev, [key]: v }));
   };
 
   return (
@@ -382,8 +601,8 @@ export function AdminDashboard() {
         <CardHeader>
           <CardTitle>יצירת משמרת</CardTitle>
           <CardDescription>
-            לכל משימה ניתן להגדיר מספר צוותים ותפקידים שונים. ברירת המחדל נטענת מההגדרה הגלובלית
-            למעלה — ניתן לשנות לפני שמירה.
+            לכל משימה מגדירים כאן מספר צוותים, תפקידים, ואפשר לשבץ חיילים ישירות לפני שמירה. תאריך
+            בשדה ISO (שנה־חודש־יום) — השדה כפוי לכיוון LTR כדי שהמקטע &quot;יום&quot; (DD) יהיה נגיש.
           </CardDescription>
         </CardHeader>
         <CardContent>
@@ -393,8 +612,20 @@ export function AdminDashboard() {
             onSubmit={(e) => void onCreateShift(e)}
           >
             <div className="grid gap-2 sm:col-span-2">
-              <Label htmlFor="ad-date">תאריך</Label>
-              <Input id="ad-date" type="date" dir="ltr" {...shiftForm.register("shift_date")} />
+              <Label htmlFor="ad-date">תאריך (YYYY-MM-DD)</Label>
+              <div
+                dir="ltr"
+                lang="en"
+                className="w-full min-w-0 isolate [unicode-bidi:isolate]"
+              >
+                <Input
+                  id="ad-date"
+                  type="date"
+                  className="w-full text-left font-mono"
+                  autoComplete="off"
+                  {...shiftForm.register("shift_date")}
+                />
+              </div>
               {shiftForm.formState.errors.shift_date && (
                 <p className="text-sm text-destructive">
                   {shiftForm.formState.errors.shift_date.message}
@@ -420,7 +651,14 @@ export function AdminDashboard() {
             </div>
             <div className="grid gap-2">
               <Label htmlFor="ad-time">שעת התחלה</Label>
-              <Input id="ad-time" type="time" dir="ltr" {...shiftForm.register("start_time")} />
+              <div dir="ltr" lang="en" className="isolate [unicode-bidi:isolate]">
+                <Input
+                  id="ad-time"
+                  type="time"
+                  className="text-left font-mono"
+                  {...shiftForm.register("start_time")}
+                />
+              </div>
               {shiftForm.formState.errors.start_time && (
                 <p className="text-sm text-destructive">
                   {shiftForm.formState.errors.start_time.message}
@@ -462,8 +700,60 @@ export function AdminDashboard() {
                 </p>
               )}
             </div>
+
+            <div className="space-y-3 sm:col-span-2">
+              <p className="text-sm font-medium text-foreground">שיבוץ חיילים למשמרת החדשה</p>
+              {createDuplicateProfileIds.size > 0 && (
+                <p className="rounded-md border border-destructive/50 bg-destructive/10 px-3 py-2 text-sm text-destructive">
+                  יש חיילים שמופיעים יותר מפעם אחת — תקן לפני שמירה.
+                </p>
+              )}
+              <div className="space-y-4 rounded-lg border border-border/60 p-4">
+                {createTeamIndices.map((team) => (
+                  <div
+                    key={team}
+                    className="space-y-3 border-b border-border/40 pb-4 last:border-0 last:pb-0"
+                  >
+                    <p className="font-medium text-muted-foreground">צוות {team}</p>
+                    <div className={cnGridForPositions(createLayout.positions.length)}>
+                      {createLayout.positions.map((pos) => {
+                        const key = matrixKey(team, pos);
+                        const val = createMatrix[key] ?? NONE;
+                        const conflict = val !== NONE && createConstraintIds.has(val);
+                        const dup = val !== NONE && createDuplicateProfileIds.has(val);
+                        return (
+                          <div key={key} className="grid min-w-0 gap-2">
+                            <Label className="flex items-center justify-end gap-1.5 text-xs">
+                              {pos}
+                              {conflict && (
+                                <AlertTriangleIcon
+                                  className="size-4 shrink-0 text-destructive"
+                                  aria-label="אילוץ בתאריך המשמרת"
+                                />
+                              )}
+                            </Label>
+                            <ProfileSearchSelect
+                              value={val}
+                              onValueChange={(v) => setCreateCell(team, pos, v)}
+                              profiles={createMatrixProfileOptions}
+                              noneValue={NONE}
+                              profileLabel={profileLabel}
+                              hasConstraint={(id) => createConstraintIds.has(id)}
+                              invalid={dup}
+                            />
+                          </div>
+                        );
+                      })}
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </div>
+
             <div className="sm:col-span-2">
-              <Button type="submit">שמירת משמרת</Button>
+              <Button type="submit" disabled={createDuplicateProfileIds.size > 0}>
+                שמירת משמרת ושיבוצים
+              </Button>
             </div>
           </form>
         </CardContent>
@@ -486,6 +776,113 @@ export function AdminDashboard() {
               onValueChange={setSelectedShiftId}
             />
           </div>
+
+          {selectedShift && editMeta && (
+            <div className="space-y-4 rounded-lg border border-border/60 bg-muted/20 p-4">
+              <p className="text-sm font-semibold">עריכת פרטי המשמרת</p>
+              <p className="text-xs text-muted-foreground">
+                שינוי מספר צוותים או תפקידים מסיר אוטומטית שיבוצים שלא נכנסים למבנה החדש. לעדכון חיילים
+                השתמש במטה ב־&quot;שמור שיבוצים&quot;.
+              </p>
+              <div className="grid gap-4 sm:grid-cols-2">
+                <div className="grid gap-2 sm:col-span-2">
+                  <Label htmlFor="ed-date">תאריך (YYYY-MM-DD)</Label>
+                  <div
+                    dir="ltr"
+                    lang="en"
+                    className="w-full min-w-0 isolate [unicode-bidi:isolate]"
+                  >
+                    <Input
+                      id="ed-date"
+                      type="date"
+                      className="w-full text-left font-mono"
+                      value={editMeta.shift_date}
+                      onChange={(e) =>
+                        setEditMeta((m) => (m ? { ...m, shift_date: e.target.value } : m))
+                      }
+                    />
+                  </div>
+                </div>
+                <div className="grid gap-2">
+                  <Label>סוג</Label>
+                  <Select
+                    value={editMeta.shift_type}
+                    onValueChange={(v) =>
+                      setEditMeta((m) =>
+                        m ? { ...m, shift_type: v as "day" | "night" } : m
+                      )
+                    }
+                  >
+                    <SelectTrigger className="w-full justify-between">
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="day">{SHIFT_TYPE_LABELS.day}</SelectItem>
+                      <SelectItem value="night">{SHIFT_TYPE_LABELS.night}</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
+                <div className="grid gap-2">
+                  <Label htmlFor="ed-time">שעת התחלה</Label>
+                  <div dir="ltr" lang="en" className="isolate [unicode-bidi:isolate]">
+                    <Input
+                      id="ed-time"
+                      type="time"
+                      className="text-left font-mono"
+                      value={editMeta.start_time}
+                      onChange={(e) =>
+                        setEditMeta((m) => (m ? { ...m, start_time: e.target.value } : m))
+                      }
+                    />
+                  </div>
+                </div>
+                <div className="grid gap-2 sm:col-span-2">
+                  <Label htmlFor="ed-mission">שם משימה</Label>
+                  <Input
+                    id="ed-mission"
+                    dir="rtl"
+                    value={editMeta.mission_name}
+                    onChange={(e) =>
+                      setEditMeta((m) => (m ? { ...m, mission_name: e.target.value } : m))
+                    }
+                  />
+                </div>
+                <div className="grid gap-2">
+                  <Label htmlFor="ed-teams">מספר צוותים</Label>
+                  <Input
+                    id="ed-teams"
+                    type="number"
+                    min={1}
+                    max={15}
+                    dir="ltr"
+                    className="text-left"
+                    value={editMeta.team_count}
+                    onChange={(e) =>
+                      setEditMeta((m) =>
+                        m ? { ...m, team_count: Number(e.target.value) } : m
+                      )
+                    }
+                  />
+                </div>
+                <div className="grid gap-2 sm:col-span-2">
+                  <Label htmlFor="ed-pos">תפקידים (פסיק או שורה)</Label>
+                  <Input
+                    id="ed-pos"
+                    dir="rtl"
+                    value={editMeta.positions_text}
+                    onChange={(e) =>
+                      setEditMeta((m) => (m ? { ...m, positions_text: e.target.value } : m))
+                    }
+                  />
+                </div>
+                <div className="sm:col-span-2">
+                  <Button type="button" variant="secondary" onClick={() => void saveShiftMetadata()}>
+                    שמור שינויים בפרטי המשמרת
+                  </Button>
+                </div>
+              </div>
+            </div>
+          )}
 
           {duplicateProfileIds.size > 0 && (
             <p className="rounded-md border border-destructive/50 bg-destructive/10 px-3 py-2 text-sm text-destructive">

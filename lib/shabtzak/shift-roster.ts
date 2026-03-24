@@ -15,6 +15,22 @@ export function parsePositionsInput(raw: string): string[] {
 }
 
 /** מבנה מטריצה להצגה — משמרת ספציפית או ברירת מחדל מההגדרה הגלובלית */
+/** מבנה טיוטה מהטופס (לפני שמירה ל-DB) */
+export function layoutFromFormFields(
+  teamCountRaw: unknown,
+  positionsText: string,
+  fallback: RosterLayout
+): RosterLayout {
+  const n = Number(teamCountRaw);
+  const team_count = Number.isFinite(n)
+    ? Math.min(15, Math.max(1, Math.floor(n)))
+    : fallback.team_count;
+  const parsed = parsePositionsInput(positionsText);
+  const positions =
+    parsed.length > 0 ? parsed : fallback.positions.length > 0 ? fallback.positions : [...DEFAULT_ROSTER_POSITIONS];
+  return { team_count, positions };
+}
+
 export function shiftRosterForDisplay(
   shift: Pick<ShiftRow, "team_count" | "positions"> | null | undefined,
   fallback: RosterLayout

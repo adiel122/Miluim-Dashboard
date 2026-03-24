@@ -12,3 +12,11 @@ export function formatTimeDisplay(t: string): string {
   if (parts.length < 2) return t;
   return `${parts[0]}:${parts[1]}`;
 }
+
+/** ערך ל־input type="time" ממחרוזת SQL */
+export function timeInputValue(t: string | null | undefined): string {
+  if (!t) return "";
+  const parts = t.split(":");
+  if (parts.length < 2) return "";
+  return `${parts[0].padStart(2, "0")}:${parts[1].padStart(2, "0")}`;
+}
