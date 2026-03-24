@@ -209,13 +209,16 @@ async function seedShiftAndAssignments(seeded) {
   const shiftDate = `${y}-${m}-${d}`;
 
   let shiftId;
-  const { data: existing } = await supabase
+  const demoMission = "כוננות דמו";
+  const { data: existingRows } = await supabase
     .from("shifts")
     .select("id")
     .eq("shift_date", shiftDate)
     .eq("shift_type", "day")
     .eq("start_time", "08:00:00")
-    .maybeSingle();
+    .eq("mission_name", demoMission)
+    .limit(1);
+  const existing = existingRows?.[0];
 
   if (existing?.id) {
     shiftId = existing.id;
@@ -226,7 +229,7 @@ async function seedShiftAndAssignments(seeded) {
       .insert({
         shift_date: shiftDate,
         shift_type: "day",
-        mission_name: "כוננות דמו",
+        mission_name: demoMission,
         start_time: "08:00:00",
         team_count: 3,
         positions: ["מפקד", "נהג", "מחלץ"],

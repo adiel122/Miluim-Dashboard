@@ -74,11 +74,12 @@ create table if not exists public.shifts (
   shift_type public.shift_type not null,
   mission_name text not null default 'כוננות לאתרי הרס',
   start_time time not null,
-  created_at timestamptz not null default now(),
-  unique (shift_date, shift_type, start_time)
+  created_at timestamptz not null default now()
 );
+-- אין ייחודיות על (תאריך, סוג, שעה) — מותרות כמה משמרות מקבילות / חופפות
 
 -- מבנה צוותים לכל משמרת: הרץ supabase/shifts_team_positions.sql אחרי הקובץ הזה
+-- DB ישן עם אילוץ ייחודי (תאריך+סוג+שעה): הרץ supabase/shifts_drop_datetime_unique.sql
 
 create index if not exists shifts_shift_date_idx on public.shifts (shift_date asc);
 
