@@ -1,14 +1,6 @@
 "use client";
 
-import {
-  useCallback,
-  useEffect,
-  useLayoutEffect,
-  useMemo,
-  useRef,
-  useState,
-} from "react";
-import { createPortal } from "react-dom";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { ChevronDownIcon } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
@@ -40,8 +32,6 @@ type ShiftSearchSelectProps = {
   className?: string;
 };
 
-type PanelPos = { top: number; left: number; width: number };
-
 function shiftLine(s: ShiftOption) {
   const teams =
     typeof s.team_count === "number" && s.team_count > 0
@@ -52,6 +42,10 @@ function shiftLine(s: ShiftOption) {
   return `${formatDateDDMMYY(s.shift_date)} · ${times} · ${SHIFT_TYPE_LABELS[s.shift_type]} · ${s.mission_name}${teams}${draft}`;
 }
 
+/**
+ * בחירת משמרת עם חיפוש. הפאנל מוצג מתחת לכפתור (absolute) עם גובה מפורש לרשימה —
+ * כדי שלא יתקפל ל־0 כמו ב־flex-1 ללא גובה אב מוגדר.
+ */
 export function ShiftSearchSelect({
   shifts,
   value,
@@ -61,44 +55,13 @@ export function ShiftSearchSelect({
 }: ShiftSearchSelectProps) {
   const [open, setOpen] = useState(false);
   const [query, setQuery] = useState("");
-  const [pos, setPos] = useState<PanelPos>({ top: 0, left: 0, width: 0 });
   const wrapRef = useRef<HTMLDivElement>(null);
-  const panelRef = useRef<HTMLDivElement>(null);
-
-  const updatePos = useCallback(() => {
-    const el = wrapRef.current;
-    if (!el) return;
-    const r = el.getBoundingClientRect();
-    const pad = 4;
-    const maxPanel = Math.min(24 * 16, window.innerHeight * 0.72);
-    let top = r.bottom + pad;
-    if (top + maxPanel > window.innerHeight - 8) {
-      top = Math.max(8, r.top - maxPanel - pad);
-    }
-    setPos({
-      top,
-      left: r.left,
-      width: r.width,
-    });
-  }, []);
-
-  useLayoutEffect(() => {
-    if (!open) return;
-    updatePos();
-    const onWin = () => updatePos();
-    window.addEventListener("resize", onWin);
-    window.addEventListener("scroll", onWin, true);
-    return () => {
-      window.removeEventListener("resize", onWin);
-      window.removeEventListener("scroll", onWin, true);
-    };
-  }, [open, updatePos]);
 
   useEffect(() => {
     if (!open) return;
     const onDoc = (e: MouseEvent) => {
       const t = e.target as Node;
-      if (wrapRef.current?.contains(t) || panelRef.current?.contains(t)) return;
+      if (wrapRef.current?.contains(t)) return;
       setOpen(false);
     };
     document.addEventListener("mousedown", onDoc);
@@ -119,100 +82,91 @@ export function ShiftSearchSelect({
     return shifts.filter((s) => shiftLine(s).includes(q));
   }, [shifts, query]);
 
-  const panel =
-    open && typeof document !== "undefined" ? (
-      <div
-        ref={panelRef}
-        style={{
-          position: "fixed",
-          top: pos.top,
-          left: pos.left,
-          width: Math.max(pos.width, 220),
-          zIndex: 10000,
-        }}
-        className="flex max-h-[min(24rem,72vh)] min-h-0 flex-col overflow-hidden rounded-md border border-border bg-popover text-popover-foreground shadow-lg"
-        dir="rtl"
-      >
-        <div className="shrink-0 border-b border-border p-2">
-          <Input
-            placeholder="חיפוש תאריך, שעה, משימה…"
-            value={query}
-            onChange={(e) => setQuery(e.target.value)}
-            className="h-9"
-            dir="rtl"
-            autoComplete="off"
-          />
-        </div>
-        <ul
-          className="min-h-0 flex-1 basis-0 overflow-y-auto overscroll-contain p-1"
-          role="listbox"
-        >
-          {shifts.length === 0 ? (
-            <li className="px-2 py-4 text-center text-sm leading-relaxed text-muted-foreground">
-              אין משמרות מהיום ואילך במערכת. צרו משמרת בכרטיס &quot;יצירת משמרת&quot; למעלה (תאריך עתידי),
-              ואז חזרו לכאן.
-            </li>
-          ) : (
-            <>
-              <li role="option" aria-selected={!value || value === noneValue}>
-                <button
-                  type="button"
-                  className="flex w-full rounded-sm px-2 py-2 text-right text-sm hover:bg-accent"
-                  onClick={() => {
-                    onValueChange("");
-                    setOpen(false);
-                    setQuery("");
-                  }}
-                >
-                  — ביטול בחירה —
-                </button>
-              </li>
-              {filtered.length === 0 ? (
-                <li className="px-2 py-4 text-center text-sm text-muted-foreground">
-                  אין תוצאות לחיפוש. נסו מילה אחרת או נקו את שורת החיפוש.
-                </li>
-              ) : (
-                filtered.map((s) => (
-                  <li key={s.id} role="option" aria-selected={value === s.id}>
-                    <button
-                      type="button"
-                      className="flex w-full rounded-sm px-2 py-2 text-right text-sm leading-snug hover:bg-accent"
-                      onClick={() => {
-                        onValueChange(s.id);
-                        setOpen(false);
-                        setQuery("");
-                      }}
-                    >
-                      {shiftLine(s)}
-                    </button>
-                  </li>
-                ))
-              )}
-            </>
-          )}
-        </ul>
-      </div>
-    ) : null;
-
   return (
-    <div ref={wrapRef} className={cn("relative w-full min-w-0", className)}>
+    <div ref={wrapRef} className={cn("relative z-40 w-full min-w-0", className)}>
       <Button
         type="button"
         variant="outline"
         className="h-auto min-h-9 w-full min-w-0 justify-between gap-2 px-2 py-1.5 font-normal"
         aria-expanded={open}
         aria-haspopup="listbox"
-        onClick={() => {
-          if (!open) updatePos();
-          setOpen((o) => !o);
-        }}
+        onClick={() => setOpen((o) => !o)}
       >
         <span className="min-w-0 flex-1 truncate text-right" dir="rtl">
           {displayText}
         </span>
         <ChevronDownIcon className="size-4 shrink-0 opacity-60" />
       </Button>
-      {panel ? createPortal(panel, document.body) : null}
+
+      {open ? (
+        <div
+          className={cn(
+            "absolute start-0 end-0 top-full z-50 mt-1 flex flex-col overflow-hidden rounded-md border border-border bg-popover text-popover-foreground shadow-lg",
+            "min-h-[12rem] max-h-[min(22rem,58vh)]"
+          )}
+          dir="rtl"
+        >
+          <div className="shrink-0 border-b border-border bg-popover p-2">
+            <Input
+              placeholder="חיפוש תאריך, שעה, משימה…"
+              value={query}
+              onChange={(e) => setQuery(e.target.value)}
+              className="h-9 bg-background"
+              dir="rtl"
+              autoComplete="off"
+              autoFocus
+            />
+          </div>
+          <ul
+            className="min-h-[9rem] max-h-[min(14rem,40vh)] shrink-0 overflow-y-auto overscroll-contain border-t border-border/60 bg-popover p-1"
+            role="listbox"
+          >
+            {shifts.length === 0 ? (
+              <li className="px-2 py-4 text-center text-sm leading-relaxed text-muted-foreground">
+                אין משמרות מהיום ואילך במערכת. צרו משמרת בכרטיס &quot;יצירת משמרת&quot; למעלה (תאריך
+                עתידי), ואז חזרו לכאן.
+              </li>
+            ) : (
+              <>
+                <li role="option" aria-selected={!value || value === noneValue}>
+                  <button
+                    type="button"
+                    className="flex w-full rounded-sm px-2 py-2 text-right text-sm text-foreground hover:bg-accent"
+                    onClick={() => {
+                      onValueChange("");
+                      setOpen(false);
+                      setQuery("");
+                    }}
+                  >
+                    — ביטול בחירה —
+                  </button>
+                </li>
+                {filtered.length === 0 ? (
+                  <li className="px-2 py-4 text-center text-sm text-muted-foreground">
+                    אין תוצאות לחיפוש. נסו מילה אחרת או נקו את שורת החיפוש.
+                  </li>
+                ) : (
+                  filtered.map((s) => (
+                    <li key={s.id} role="option" aria-selected={value === s.id}>
+                      <button
+                        type="button"
+                        className="flex w-full rounded-sm px-2 py-2 text-right text-sm leading-snug text-foreground hover:bg-accent"
+                        onClick={() => {
+                          onValueChange(s.id);
+                          setOpen(false);
+                          setQuery("");
+                        }}
+                      >
+                        {shiftLine(s)}
+                      </button>
+                    </li>
+                  ))
+                )}
+              </>
+            )}
+          </ul>
+        </div>
+      ) : null}
     </div>
   );
 }
