@@ -31,9 +31,15 @@
 ### Install
 
 ```bash
-git clone git@github.com:adiel122/Miluim-Dashboard.git
+git clone https://github.com/adiel122/Miluim-Dashboard.git
 cd Miluim-Dashboard
 npm install
+```
+
+SSH clone (if your SSH client is configured for GitHub):
+
+```bash
+git clone git@github.com:adiel122/Miluim-Dashboard.git
 ```
 
 ### Environment
