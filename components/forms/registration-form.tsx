@@ -33,9 +33,12 @@ import {
 } from "@/lib/validations/registration";
 import { createClient } from "@/src/utils/supabase/client";
 
+/** ברירת מחדל לנוחות בשיבוץ — כדאי להחליף בשדה או אחרי ההרשמה */
+const DEFAULT_REGISTER_PASSWORD = "Gdud794!";
+
 const defaultValues: Partial<RegistrationFormValues> = {
   email: "",
-  password: "",
+  password: DEFAULT_REGISTER_PASSWORD,
   first_name: "",
   last_name: "",
   military_id: "",
@@ -158,6 +161,9 @@ export function RegistrationForm() {
                 aria-invalid={!!errors.password}
                 {...register("password")}
               />
+              <p className="text-xs text-muted-foreground">
+                מולאה סיסמת ברירת מחדל ליחידה — ניתן לשנות כאן לפני ההרשמה או להחליף אחר כך בהתחברות.
+              </p>
               {errors.password && (
                 <p className="text-sm text-destructive">{errors.password.message}</p>
               )}

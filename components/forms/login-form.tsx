@@ -37,23 +37,11 @@ export function LoginForm() {
     router.push(nextPath);
   };
 
-  const signInGoogle = async () => {
-    const supabase = createClient();
-    const origin = typeof window !== "undefined" ? window.location.origin : "";
-    const { error } = await supabase.auth.signInWithOAuth({
-      provider: "google",
-      options: {
-        redirectTo: `${origin}/auth/callback?next=${encodeURIComponent(nextPath)}`,
-      },
-    });
-    if (error) toast.error(formatAuthFlowError(error));
-  };
-
   return (
     <Card className="w-full max-w-md border-border/80 shadow-sm">
       <CardHeader className="text-right">
         <CardTitle className="text-xl">התחברות</CardTitle>
-        <CardDescription>אימייל או Google — אחרי ההתחברות נעבור לשבצ״ק.</CardDescription>
+        <CardDescription>אימייל וסיסמה — אחרי ההתחברות נעבור ליעד הבא.</CardDescription>
       </CardHeader>
       <form method="post" onSubmit={signInEmail}>
         <CardContent className="grid gap-5 text-right">
@@ -82,15 +70,7 @@ export function LoginForm() {
             />
           </div>
           <Button type="submit" className="w-full" disabled={loading}>
-            {loading ? "מתחבר…" : "התחברות באימייל"}
-          </Button>
-          <Button
-            type="button"
-            variant="secondary"
-            className="w-full"
-            onClick={() => void signInGoogle()}
-          >
-            Google
+            {loading ? "מתחבר…" : "התחבר"}
           </Button>
         </CardContent>
       </form>
