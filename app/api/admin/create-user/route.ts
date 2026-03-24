@@ -2,7 +2,10 @@ import { NextResponse } from "next/server";
 
 import { requireAdmin } from "@/lib/auth/require-admin-api";
 import { isPhoneUniqueViolation } from "@/lib/supabase/postgres-errors";
-import { createServiceRoleClient } from "@/lib/supabase/service-role";
+import {
+  createServiceRoleClient,
+  MISSING_SERVICE_ROLE_CONFIG_MESSAGE,
+} from "@/lib/supabase/service-role";
 import { adminCreateUserBodySchema } from "@/lib/validations/profile";
 
 /** כתובת כניסה ל-Supabase Auth כשאין מייל אמיתי (ייחודית לפי טלפון) */
@@ -30,7 +33,7 @@ export async function POST(request: Request) {
     service = createServiceRoleClient();
   } catch {
     return NextResponse.json(
-      { error: "השרת לא מוגדר עם SUPABASE_SERVICE_ROLE_KEY" },
+      { error: MISSING_SERVICE_ROLE_CONFIG_MESSAGE },
       { status: 500 }
     );
   }

@@ -2,7 +2,10 @@ import { NextResponse } from "next/server";
 import { z } from "zod";
 
 import { requireAdmin } from "@/lib/auth/require-admin-api";
-import { createServiceRoleClient } from "@/lib/supabase/service-role";
+import {
+  createServiceRoleClient,
+  MISSING_SERVICE_ROLE_CONFIG_MESSAGE,
+} from "@/lib/supabase/service-role";
 
 const LONG_BAN = "876000h";
 
@@ -36,7 +39,7 @@ export async function POST(request: Request) {
     service = createServiceRoleClient();
   } catch {
     return NextResponse.json(
-      { error: "השרת לא מוגדר עם SUPABASE_SERVICE_ROLE_KEY" },
+      { error: MISSING_SERVICE_ROLE_CONFIG_MESSAGE },
       { status: 500 }
     );
   }
