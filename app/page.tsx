@@ -23,6 +23,18 @@ export default function HomePage() {
               בית
             </Link>
             <Link
+              href="/register"
+              className={cn(buttonVariants({ variant: "secondary", size: "sm" }))}
+            >
+              הרשמה
+            </Link>
+            <Link
+              href="/shabtzak"
+              className={cn(buttonVariants({ variant: "ghost", size: "sm" }))}
+            >
+              שבצ״ק
+            </Link>
+            <Link
               href="/admin"
               className={cn(buttonVariants({ variant: "ghost", size: "sm" }))}
             >

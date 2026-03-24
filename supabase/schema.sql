@@ -6,13 +6,6 @@ create extension if not exists "pgcrypto";
 -- --- Types ---
 do $$
 begin
-  create type public.user_role as enum ('soldier', 'unit', 'admin');
-exception
-  when duplicate_object then null;
-end $$;
-
-do $$
-begin
   create type public.listing_status as enum ('pending', 'approved', 'closed');
 exception
   when duplicate_object then null;
@@ -21,21 +14,27 @@ end $$;
 -- --- profiles: 1:1 with auth.users (personal & military identity) ---
 create table if not exists public.profiles (
   id uuid primary key references auth.users (id) on delete cascade,
-  first_name text not null,
-  last_name text not null,
-  military_id text not null
+  first_name text,
+  last_name text,
+  military_id text
     constraint military_id_seven_digits check (
-      char_length(military_id) = 7
-      and military_id ~ '^[0-9]{7}$'
+      military_id is null
+      or (
+        char_length(military_id) = 7
+        and military_id ~ '^[0-9]{7}$'
+      )
     ),
-  phone text not null
+  phone text
     constraint phone_ten_digits check (
-      char_length(phone) = 10
-      and phone ~ '^[0-9]{10}$'
+      phone is null
+      or (
+        char_length(phone) = 10
+        and phone ~ '^[0-9]{10}$'
+      )
     ),
-  rank text not null,
-  military_role text not null,
-  role public.user_role not null default 'soldier',
+  rank text,
+  role_description text,
+  is_admin boolean not null default false,
   created_at timestamptz not null default now(),
   updated_at timestamptz not null default now(),
   constraint profiles_military_id_key unique (military_id)
