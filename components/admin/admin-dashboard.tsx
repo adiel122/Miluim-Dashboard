@@ -26,6 +26,7 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { profilesForAssignmentMatrix } from "@/lib/shabtzak/profile-filters";
 import { isMissingRelationError } from "@/lib/supabase/relation-error";
 import type { ProfileRow, ShiftRow } from "@/lib/types/shabtzak";
 import { DEFAULT_ROSTER_POSITIONS, SHIFT_TYPE_LABELS } from "@/lib/types/shabtzak";
@@ -94,6 +95,11 @@ export function AdminDashboard() {
         .map(([id]) => id)
     );
   }, [matrix, roster.positions, teamIndices]);
+
+  const matrixProfileOptions = useMemo(
+    () => profilesForAssignmentMatrix(profiles, matrix, NONE),
+    [profiles, matrix]
+  );
 
   const loadRoster = useCallback(async () => {
     const supabase = createClient();
@@ -465,7 +471,7 @@ export function AdminDashboard() {
                           <ProfileSearchSelect
                             value={val}
                             onValueChange={(v) => setCell(team, pos, v)}
-                            profiles={profiles}
+                            profiles={matrixProfileOptions}
                             noneValue={NONE}
                             profileLabel={profileLabel}
                             hasConstraint={(id) => constraintIds.has(id)}

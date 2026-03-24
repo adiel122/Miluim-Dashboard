@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import { Trash2Icon } from "lucide-react";
 import { toast } from "sonner";
 
@@ -17,6 +17,7 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
+import { filterProfilesForDropdown } from "@/lib/shabtzak/profile-filters";
 import type { ProfileRow } from "@/lib/types/shabtzak";
 import { isMissingRelationError } from "@/lib/supabase/relation-error";
 import { formatDateDDMMYY } from "@/src/lib/date-format";
@@ -40,6 +41,8 @@ type AfterHoursCardProps = {
 };
 
 export function AfterHoursCard({ profiles, profileLabel, onMutate }: AfterHoursCardProps) {
+  const profilesForSelect = useMemo(() => filterProfilesForDropdown(profiles), [profiles]);
+
   const [rows, setRows] = useState<AfterHoursRow[]>([]);
   const [loading, setLoading] = useState(true);
   const [profileId, setProfileId] = useState(NONE);
@@ -73,6 +76,13 @@ export function AfterHoursCard({ profiles, profileLabel, onMutate }: AfterHoursC
   useEffect(() => {
     void load();
   }, [load]);
+
+  useEffect(() => {
+    if (profileId === NONE || !profileId) return;
+    if (!profilesForSelect.some((p) => p.id === profileId)) {
+      setProfileId(NONE);
+    }
+  }, [profileId, profilesForSelect]);
 
   const addRow = async () => {
     if (!outingDate) {
@@ -149,7 +159,7 @@ export function AfterHoursCard({ profiles, profileLabel, onMutate }: AfterHoursC
                 <ProfileSearchSelect
                   value={profileId === NONE ? NONE : profileId}
                   onValueChange={(v) => setProfileId(v)}
-                  profiles={profiles}
+                  profiles={profilesForSelect}
                   noneValue={NONE}
                   profileLabel={profileLabel}
                   hasConstraint={() => false}
