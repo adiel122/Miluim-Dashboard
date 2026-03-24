@@ -320,3 +320,6 @@ create policy "after_hours_admin_delete"
 
 -- משתמש ראשון כמנהל (הרץ פעם אחת; החלף למזהה או למספר אישי הרלוונטי):
 -- update public.profiles set is_admin = true where military_id = '0123456';
+
+-- פרודקשן: לאחר שהסכימה רצה, הרץ גם supabase/rls_lockdown_anon.sql
+-- כדי שללא התחברות מפתח ה-anon לא יקבל גישה לטבלאות בכלל (מעבר ל-RLS).
