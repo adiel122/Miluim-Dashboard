@@ -42,3 +42,19 @@ export const profileCoreSchema = profileMinimalSchema.merge(profileOptionalField
 export type ProfileMinimalValues = z.output<typeof profileMinimalSchema>;
 export type ProfileCoreValues = z.output<typeof profileCoreSchema>;
 export type ProfileFormInput = z.input<typeof profileCoreSchema>;
+
+/** יצירת משתמש מלוח ניהול: כמו פרופיל מלא + סיסמה; מייל אופציונלי (בלי מייל — מזהה טכני מטלפון) */
+export const adminCreateUserBodySchema = profileCoreSchema
+  .extend({
+    email: z
+      .union([z.string(), z.undefined(), z.null()])
+      .transform((s) => (s ?? "").trim()),
+    password: z.string().min(8, "לפחות 8 תווים").max(72, "סיסמה ארוכה מדי"),
+  })
+  .superRefine((val, ctx) => {
+    if (val.email.length > 0 && !z.string().email().safeParse(val.email).success) {
+      ctx.addIssue({ code: "custom", message: "מייל לא תקין", path: ["email"] });
+    }
+  });
+
+export type AdminCreateUserBody = z.output<typeof adminCreateUserBodySchema>;

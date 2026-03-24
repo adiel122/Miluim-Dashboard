@@ -145,6 +145,27 @@ export function AdminUsersCard({ profiles, profileLabel, onChanged }: AdminUsers
   };
 
   const submitAddUser = async () => {
+    const rankParsed =
+      addRank && (IDF_RANKS as readonly string[]).includes(addRank)
+        ? (addRank as (typeof IDF_RANKS)[number])
+        : undefined;
+    const parsed = profileCoreSchema.safeParse({
+      first_name: addFirst,
+      last_name: addLast,
+      phone: addPhone,
+      military_id: addMid,
+      rank: rankParsed,
+      role_description: addRole,
+    });
+    if (!parsed.success) {
+      toast.error(parsed.error.issues[0]?.message ?? "נתונים לא תקינים");
+      return;
+    }
+    if (addPassword.length < 8) {
+      toast.error("סיסמה: לפחות 8 תווים");
+      return;
+    }
+
     setAddBusy(true);
     try {
       const res = await fetch("/api/admin/create-user", {
@@ -153,15 +174,20 @@ export function AdminUsersCard({ profiles, profileLabel, onChanged }: AdminUsers
         body: JSON.stringify({
           email: addEmail.trim(),
           password: addPassword,
-          first_name: addFirst.trim() || undefined,
-          last_name: addLast.trim() || undefined,
-          military_id: addMid.trim() || undefined,
-          phone: addPhone.trim() || undefined,
-          rank: addRank.trim() || undefined,
-          role_description: addRole.trim() || undefined,
+          first_name: parsed.data.first_name,
+          last_name: parsed.data.last_name,
+          phone: parsed.data.phone,
+          military_id: parsed.data.military_id,
+          rank: parsed.data.rank,
+          role_description: parsed.data.role_description,
         }),
       });
-      const data = (await res.json()) as { error?: string; ok?: boolean };
+      const data = (await res.json()) as {
+        error?: string;
+        ok?: boolean;
+        loginEmail?: string;
+        usedSyntheticEmail?: boolean;
+      };
       if (!res.ok) {
         toast.error(
           res.status === 409
@@ -170,7 +196,12 @@ export function AdminUsersCard({ profiles, profileLabel, onChanged }: AdminUsers
         );
         return;
       }
-      toast.success("משתמש נוצר");
+      const login = data.loginEmail ?? "";
+      toast.success(
+        data.usedSyntheticEmail
+          ? `נוצר. התחברות (מייל טכני לפי טלפון): ${login}`
+          : `נוצר. התחברות: ${login}`
+      );
       setAddOpen(false);
       resetAddForm();
       onChanged();
@@ -435,35 +466,11 @@ export function AdminUsersCard({ profiles, profileLabel, onChanged }: AdminUsers
           <DialogHeader>
             <DialogTitle className="text-right">הוספת משתמש</DialogTitle>
             <DialogDescription className="text-right">
-              חובה: מייל וסיסמה. שם וטלפון מומלץ — אפשר להשלים ב&quot;עריכה&quot; אחרי יצירה. טלפון לא יכול
-              לחזור על עצמו במערכת.
+              כמו בעריכה: שם מלא וטלפון חובה. מייל אופציונלי — בלי מייל נוצרת כתובת טכנית להתחברות (תוצג אחרי
+              השמירה). התחברות מנהלים נשארת עם המייל הרגיל שלכם. סיסמה: לפחות 8 תווים.
             </DialogDescription>
           </DialogHeader>
           <div className="grid gap-3 text-right">
-            <div className="grid gap-2">
-              <Label htmlFor="add-email">מייל — חובה</Label>
-              <Input
-                id="add-email"
-                type="email"
-                dir="ltr"
-                className="text-left"
-                value={addEmail}
-                onChange={(e) => setAddEmail(e.target.value)}
-                autoComplete="off"
-              />
-            </div>
-            <div className="grid gap-2">
-              <Label htmlFor="add-pw">סיסמה</Label>
-              <Input
-                id="add-pw"
-                type="password"
-                dir="ltr"
-                className="text-left"
-                value={addPassword}
-                onChange={(e) => setAddPassword(e.target.value)}
-                autoComplete="new-password"
-              />
-            </div>
             <div className="grid gap-2 sm:grid-cols-2 sm:gap-2">
               <div className="grid gap-2">
                 <Label htmlFor="add-fn">שם פרטי</Label>
@@ -475,17 +482,7 @@ export function AdminUsersCard({ profiles, profileLabel, onChanged }: AdminUsers
               </div>
             </div>
             <div className="grid gap-2">
-              <Label htmlFor="add-mid">מספר אישי (7 ספרות)</Label>
-              <Input
-                id="add-mid"
-                dir="ltr"
-                className="text-left"
-                value={addMid}
-                onChange={(e) => setAddMid(e.target.value)}
-              />
-            </div>
-            <div className="grid gap-2">
-              <Label htmlFor="add-ph">טלפון</Label>
+              <Label htmlFor="add-ph">טלפון (10 ספרות, 0 מוביל)</Label>
               <Input
                 id="add-ph"
                 dir="ltr"
@@ -495,12 +492,62 @@ export function AdminUsersCard({ profiles, profileLabel, onChanged }: AdminUsers
               />
             </div>
             <div className="grid gap-2">
-              <Label htmlFor="add-rank">דרגה</Label>
-              <Input id="add-rank" value={addRank} onChange={(e) => setAddRank(e.target.value)} />
+              <Label htmlFor="add-mid">מספר אישי (אופציונלי)</Label>
+              <Input
+                id="add-mid"
+                dir="ltr"
+                className="text-left"
+                value={addMid}
+                onChange={(e) => setAddMid(e.target.value)}
+              />
             </div>
             <div className="grid gap-2">
-              <Label htmlFor="add-role">תפקיד</Label>
+              <Label htmlFor="add-rank">דרגה</Label>
+              <Select
+                value={addRank || "__none__"}
+                onValueChange={(v) => setAddRank(v == null || v === "__none__" ? "" : v)}
+              >
+                <SelectTrigger id="add-rank" className="w-full justify-between">
+                  <SelectValue placeholder="ללא" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="__none__">ללא</SelectItem>
+                  {IDF_RANKS.map((r) => (
+                    <SelectItem key={r} value={r}>
+                      {r}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+            <div className="grid gap-2">
+              <Label htmlFor="add-role">תפקיד (תיאור)</Label>
               <Input id="add-role" value={addRole} onChange={(e) => setAddRole(e.target.value)} />
+            </div>
+            <div className="grid gap-2">
+              <Label htmlFor="add-email">מייל (אופציונלי)</Label>
+              <Input
+                id="add-email"
+                type="email"
+                dir="ltr"
+                className="text-left"
+                value={addEmail}
+                onChange={(e) => setAddEmail(e.target.value)}
+                autoComplete="off"
+                placeholder="ריק = כניסה לפי כתובת טכנית מהטלפון"
+              />
+            </div>
+            <div className="grid gap-2">
+              <Label htmlFor="add-pw">סיסמה ראשונית</Label>
+              <Input
+                id="add-pw"
+                type="password"
+                dir="ltr"
+                className="text-left"
+                value={addPassword}
+                onChange={(e) => setAddPassword(e.target.value)}
+                autoComplete="new-password"
+              />
             </div>
             <div className="flex flex-wrap justify-end gap-2 pt-2">
               <Button type="button" variant="outline" disabled={addBusy} onClick={() => closeAddDialog(false)}>
@@ -508,7 +555,7 @@ export function AdminUsersCard({ profiles, profileLabel, onChanged }: AdminUsers
               </Button>
               <Button
                 type="button"
-                disabled={addBusy || !addEmail.trim() || addPassword.length < 8}
+                disabled={addBusy || addPassword.length < 8}
                 onClick={() => void submitAddUser()}
               >
                 {addBusy ? "יוצר…" : "יצירת משתמש"}

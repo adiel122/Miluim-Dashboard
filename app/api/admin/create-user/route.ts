@@ -1,35 +1,12 @@
 import { NextResponse } from "next/server";
-import { z } from "zod";
 
 import { requireAdmin } from "@/lib/auth/require-admin-api";
 import { isPhoneUniqueViolation } from "@/lib/supabase/postgres-errors";
 import { createServiceRoleClient } from "@/lib/supabase/service-role";
+import { adminCreateUserBodySchema } from "@/lib/validations/profile";
 
-const bodySchema = z
-  .object({
-    email: z.string().trim().email("מייל לא תקין"),
-    password: z.string().min(8, "לפחות 8 תווים").max(72, "סיסמה ארוכה מדי"),
-    first_name: z.string().trim().optional(),
-    last_name: z.string().trim().optional(),
-    military_id: z.string().trim().optional(),
-    phone: z.string().trim().optional(),
-    rank: z.string().trim().optional(),
-    role_description: z.string().trim().max(200).optional(),
-  })
-  .superRefine((val, ctx) => {
-    const mid = (val.military_id ?? "").replace(/\D/g, "");
-    if (mid.length > 0 && !/^\d{7}$/.test(mid)) {
-      ctx.addIssue({ code: "custom", message: "מספר אישי — בדיוק 7 ספרות", path: ["military_id"] });
-    }
-    const ph = (val.phone ?? "").replace(/\D/g, "");
-    if (ph.length > 0 && !/^0\d{9}$/.test(ph)) {
-      ctx.addIssue({
-        code: "custom",
-        message: "טלפון — 10 ספרות עם 0 מוביל",
-        path: ["phone"],
-      });
-    }
-  });
+/** כתובת כניסה ל-Supabase Auth כשאין מייל אמיתי (ייחודית לפי טלפון) */
+const SYNTHETIC_EMAIL_DOMAIN = "users.invalid";
 
 export async function POST(request: Request) {
   const admin = await requireAdmin();
@@ -42,7 +19,7 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: "גוף בקשה לא תקין" }, { status: 400 });
   }
 
-  const parsed = bodySchema.safeParse(json);
+  const parsed = adminCreateUserBodySchema.safeParse(json);
   if (!parsed.success) {
     const msg = parsed.error.issues[0]?.message ?? "נתונים לא תקינים";
     return NextResponse.json({ error: msg }, { status: 400 });
@@ -59,43 +36,50 @@ export async function POST(request: Request) {
   }
 
   const b = parsed.data;
-  const militaryId = (b.military_id ?? "").replace(/\D/g, "");
-  const phone = (b.phone ?? "").replace(/\D/g, "");
+  const phone = b.phone;
 
-  if (phone) {
-    const { data: phoneTaken } = await service.from("profiles").select("id").eq("phone", phone).maybeSingle();
-    if (phoneTaken) {
-      return NextResponse.json({ error: "מספר הטלפון כבר רשום במערכת" }, { status: 409 });
-    }
+  const { data: phoneTaken } = await service.from("profiles").select("id").eq("phone", phone).maybeSingle();
+  if (phoneTaken) {
+    return NextResponse.json({ error: "מספר הטלפון כבר רשום במערכת" }, { status: 409 });
   }
-  const meta: Record<string, string> = {};
-  if (b.first_name?.trim()) meta.first_name = b.first_name.trim();
-  if (b.last_name?.trim()) meta.last_name = b.last_name.trim();
-  if (militaryId) meta.military_id = militaryId;
-  if (phone) meta.phone = phone;
-  if (b.rank?.trim()) meta.rank = b.rank.trim();
-  if (b.role_description?.trim()) meta.role_description = b.role_description.trim();
+
+  const emailTrim = b.email.trim();
+  const authEmail =
+    emailTrim.length > 0 ? emailTrim.toLowerCase() : `${phone}@${SYNTHETIC_EMAIL_DOMAIN}`;
+
+  const meta: Record<string, string> = {
+    first_name: b.first_name,
+    last_name: b.last_name,
+    phone,
+  };
+  if (b.military_id) meta.military_id = b.military_id;
+  if (b.rank) meta.rank = b.rank;
+  if (b.role_description) meta.role_description = b.role_description;
 
   const { data, error } = await service.auth.admin.createUser({
-    email: b.email,
+    email: authEmail,
     password: b.password,
     email_confirm: true,
     user_metadata: meta,
   });
 
   if (error || !data.user) {
-    return NextResponse.json({ error: error?.message ?? "יצירה נכשלה" }, { status: 400 });
+    const msg = error?.message ?? "יצירה נכשלה";
+    if (/already|registered|exists|duplicate/i.test(msg)) {
+      return NextResponse.json({ error: "כתובת המייל כבר קיימת במערכת" }, { status: 409 });
+    }
+    return NextResponse.json({ error: msg }, { status: 400 });
   }
 
   const { error: profErr } = await service.from("profiles").upsert(
     {
       id: data.user.id,
-      first_name: b.first_name?.trim() || null,
-      last_name: b.last_name?.trim() || null,
-      military_id: militaryId || null,
-      phone: phone || null,
-      rank: b.rank?.trim() || null,
-      role_description: b.role_description?.trim() || null,
+      first_name: b.first_name,
+      last_name: b.last_name,
+      military_id: b.military_id ?? null,
+      phone,
+      rank: b.rank ?? null,
+      role_description: b.role_description ?? null,
       is_admin: false,
       is_active: true,
       updated_at: new Date().toISOString(),
@@ -111,5 +95,10 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: profErr.message }, { status: 400 });
   }
 
-  return NextResponse.json({ ok: true, userId: data.user.id });
+  return NextResponse.json({
+    ok: true,
+    userId: data.user.id,
+    loginEmail: authEmail,
+    usedSyntheticEmail: emailTrim.length === 0,
+  });
 }
