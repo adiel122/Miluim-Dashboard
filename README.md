@@ -1,36 +1,106 @@
-This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
+# Miluim Dashboard
 
-## Getting Started
+**מילואים סיפוח** — a reserve-duty matchmaking dashboard: connecting reserve soldiers with units (open roles), with admin moderation, Hebrew UI, and right-to-left (RTL) layout.
 
-First, run the development server:
+## Tech stack
+
+| Layer | Choice |
+|--------|--------|
+| Framework | [Next.js 14](https://nextjs.org/) (App Router), React 18, TypeScript |
+| Styling | [Tailwind CSS](https://tailwindcss.com/) 3.x, [shadcn](https://ui.shadcn.com/) / Base UI components |
+| Forms & validation | [react-hook-form](https://react-hook-form.com/), [Zod](https://zod.dev/), [@hookform/resolvers](https://github.com/react-hook-form/resolvers) |
+| Backend & auth | [Supabase](https://supabase.com/) (PostgreSQL, Auth, RLS) — wired in `lib/supabase/` |
+| Hosting | Designed for [Vercel](https://vercel.com/) |
+
+## Features
+
+- **Hebrew / RTL**: `lang="he"`, `dir="rtl"`, Rubik font with Hebrew subset.
+- **Profiles**: `first_name`, `last_name`, `military_id` (7 digits, stored as text), `phone` (Israeli 10 digits with leading `0`), `rank` (closed IDF rank list), `military_role`.
+- **Listings**: title, description, rank/profession/location, `status`: `pending` → `approved` / `closed`.
+- **Listing submission form**: client form with Zod validation and shadcn-style inputs.
+- **Admin route** (`/admin`): placeholder for protected dashboard (approve/edit/delete, user management).
+
+## Getting started
+
+### Prerequisites
+
+- Node.js 18+
+- npm
+- A [Supabase](https://supabase.com/) project (optional until you connect env vars)
+
+### Install
+
+```bash
+git clone git@github.com:adiel122/Miluim-Dashboard.git
+cd Miluim-Dashboard
+npm install
+```
+
+### Environment
+
+Copy `.env.example` to `.env.local` and fill in your project values:
+
+```bash
+cp .env.example .env.local
+```
+
+| Variable | Description |
+|----------|-------------|
+| `NEXT_PUBLIC_SUPABASE_URL` | Supabase project URL |
+| `NEXT_PUBLIC_SUPABASE_ANON_KEY` | Supabase anonymous (public) key |
+
+### Database
+
+In the Supabase SQL editor, run:
+
+`supabase/schema.sql`
+
+This creates `profiles` (linked to `auth.users`), `listings`, enums, indexes, and baseline Row Level Security policies. Adjust policies when you add an admin role or service-role operations.
+
+### Run locally
 
 ```bash
 npm run dev
-# or
-yarn dev
-# or
-pnpm dev
-# or
-bun dev
 ```
 
-Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
+Open [http://localhost:3000](http://localhost:3000).
 
-You can start editing the page by modifying `app/page.tsx`. The page auto-updates as you edit the file.
+### Build
 
-This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
+```bash
+npm run build
+npm start
+```
 
-## Learn More
+## Project structure
 
-To learn more about Next.js, take a look at the following resources:
+```
+app/                    # App Router pages & layouts
+  admin/                # Admin placeholder
+components/
+  forms/                # e.g. listing submission form
+  ui/                   # Shared UI primitives
+lib/
+  constants/            # IDF ranks, role suggestions
+  supabase/             # Browser & server Supabase clients
+  validations/          # Zod schemas
+supabase/
+  schema.sql            # PostgreSQL schema for Supabase
+```
 
-- [Next.js Documentation](https://nextjs.org/docs) - learn about Next.js features and API.
-- [Learn Next.js](https://nextjs.org/learn) - an interactive Next.js tutorial.
+## Deployment (Vercel)
 
-You can check out [the Next.js GitHub repository](https://github.com/vercel/next.js) - your feedback and contributions are welcome!
+1. Push this repo to GitHub.
+2. Import the project in Vercel.
+3. Set the same environment variables as in `.env.local`.
+4. Deploy. Run `supabase/schema.sql` on your Supabase project before relying on app features that read/write those tables.
 
-## Deploy on Vercel
+## Notes
 
-The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
+- **Package name**: the npm package is `miluim` (lowercase) due to npm naming rules; the repository display name may differ.
+- **Tailwind**: this repo targets Tailwind 3; shadcn v4 Tailwind v4-only CSS imports were removed from `globals.css` so builds stay compatible. You may migrate to Tailwind 4 later if you want the full shadcn v4 CSS pipeline.
+- **Secrets**: never commit `.env` or `.env*.local` (see `.gitignore`).
 
-Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
+## License
+
+Private / all rights reserved unless you add an explicit license file.
