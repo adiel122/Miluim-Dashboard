@@ -12,7 +12,7 @@ import { AdminUsersCard } from "@/components/admin/admin-users-card";
 import { JusticeLeagueCard } from "@/components/admin/justice-league-card";
 import { ProfileSearchSelect } from "@/components/admin/profile-search-select";
 import { ShiftSearchSelect } from "@/components/admin/shift-search-select";
-import { YmdDateInputs } from "@/components/admin/ymd-date-inputs";
+import { DateFieldCalendar } from "@/components/ui/date-field-calendar";
 import { ShiftBoardShiftCards } from "@/components/shabtzak/shift-board-cards";
 import { SoldierContactDialog } from "@/components/shabtzak/soldier-contact-dialog";
 import { Badge } from "@/components/ui/badge";
@@ -653,7 +653,7 @@ export function AdminDashboard() {
         <CardHeader>
           <CardTitle>יצירת משמרת</CardTitle>
           <CardDescription>
-            מגדירים תאריך (שנה / חודש / יום), שעת התחלה וסיום, מבנה צוותים ושיבוץ חיילים לפני שמירה.
+            תאריך: יומן או הזנה ידנית; שעות התחלה וסיום, מבנה צוותים ושיבוץ חיילים לפני שמירה.
           </CardDescription>
         </CardHeader>
         <CardContent>
@@ -664,7 +664,7 @@ export function AdminDashboard() {
           >
             <div className="grid gap-2 sm:col-span-2">
               <Label>תאריך</Label>
-              <YmdDateInputs
+              <DateFieldCalendar
                 idPrefix="ad"
                 value={shiftForm.watch("shift_date") ?? ""}
                 onChange={(v) =>
@@ -829,6 +829,23 @@ export function AdminDashboard() {
           </CardDescription>
         </CardHeader>
         <CardContent className="space-y-4 overflow-visible">
+          <div
+            className="rounded-lg border border-sky-200 bg-sky-50/90 p-3 text-right text-sm text-foreground dark:border-sky-900/60 dark:bg-sky-950/40"
+            role="note"
+          >
+            <p className="font-semibold text-sky-950 dark:text-sky-100">איפה התצוגה המקדימה והפרסום?</p>
+            <ol className="mt-2 list-decimal list-inside space-y-1 text-muted-foreground">
+              <li>
+                בחרו משמרת מהרשימה למטה. אם הרשימה ריקה — יש ליצור משמרת בכרטיס &quot;יצירת משמרת&quot;
+                עם תאריך מהיום ואילך.
+              </li>
+              <li>
+                מיד אחרי הבחירה יופיעו: סטטוס <strong>טיוטה / מפורסם</strong>, כפתור{" "}
+                <strong>פרסם לשבצ״ק הציבורי</strong> (או החזרה לטיוטה), ואז בלוק{" "}
+                <strong>תצוגה מקדימה</strong> ועריכת השיבוץ.
+              </li>
+            </ol>
+          </div>
           <div className="grid min-w-0 gap-2">
             <Label>משמרת</Label>
             <ShiftSearchSelect
@@ -889,7 +906,7 @@ export function AdminDashboard() {
               <div className="grid gap-4 sm:grid-cols-2">
                 <div className="grid gap-2 sm:col-span-2">
                   <Label>תאריך</Label>
-                  <YmdDateInputs
+                  <DateFieldCalendar
                     idPrefix="ed"
                     value={editMeta.shift_date}
                     onChange={(v) => setEditMeta((m) => (m ? { ...m, shift_date: v } : m))}

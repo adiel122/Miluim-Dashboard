@@ -2,7 +2,7 @@
 
 import { useCallback, useEffect, useState } from "react";
 
-import { YmdDateInputs } from "@/components/admin/ymd-date-inputs";
+import { DateFieldCalendar } from "@/components/ui/date-field-calendar";
 import { Button } from "@/components/ui/button";
 import { Label } from "@/components/ui/label";
 import { ShiftBoardShiftCards, type ShiftBoardShiftNested } from "@/components/shabtzak/shift-board-cards";
@@ -107,12 +107,12 @@ export function ShiftBoardTab() {
 
   return (
     <div className="w-full min-w-0 space-y-6">
-      <div className="flex flex-wrap items-end gap-3 border-b border-border/60 pb-4">
-        <div className="grid min-w-[10rem] flex-1 gap-2 sm:min-w-[12rem] sm:flex-initial">
+      <div className="flex flex-wrap items-start gap-3 border-b border-border/60 pb-4">
+        <div className="grid min-w-0 flex-1 gap-2 sm:min-w-[14rem] sm:flex-initial sm:max-w-md">
           <Label>תאריך בשבצ״ק</Label>
-          <YmdDateInputs
+          <DateFieldCalendar
             idPrefix="board"
-            className="w-full sm:w-auto"
+            className="w-full"
             value={selectedDate}
             onChange={setSelectedDate}
           />

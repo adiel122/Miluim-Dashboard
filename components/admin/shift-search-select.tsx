@@ -122,9 +122,9 @@ export function ShiftSearchSelect({
           top: pos.top,
           left: pos.left,
           width: Math.max(pos.width, 220),
-          zIndex: 200,
+          zIndex: 10000,
         }}
-        className="flex max-h-80 flex-col overflow-hidden rounded-md border border-border bg-popover text-popover-foreground shadow-lg"
+        className="flex max-h-[min(24rem,70vh)] flex-col overflow-hidden rounded-md border border-border bg-popover text-popover-foreground shadow-lg"
         dir="rtl"
       >
         <div className="border-b border-border p-2">
@@ -137,35 +137,53 @@ export function ShiftSearchSelect({
             autoComplete="off"
           />
         </div>
-        <ul className="max-h-60 overflow-y-auto overscroll-contain p-1" role="listbox">
-          <li role="option" aria-selected={!value || value === noneValue}>
-            <button
-              type="button"
-              className="flex w-full rounded-sm px-2 py-2 text-right text-sm hover:bg-accent"
-              onClick={() => {
-                onValueChange("");
-                setOpen(false);
-                setQuery("");
-              }}
-            >
-              —
-            </button>
-          </li>
-          {filtered.map((s) => (
-            <li key={s.id} role="option" aria-selected={value === s.id}>
-              <button
-                type="button"
-                className="flex w-full rounded-sm px-2 py-2 text-right text-sm leading-snug hover:bg-accent"
-                onClick={() => {
-                  onValueChange(s.id);
-                  setOpen(false);
-                  setQuery("");
-                }}
-              >
-                {shiftLine(s)}
-              </button>
+        <ul
+          className="min-h-[7rem] max-h-60 overflow-y-auto overscroll-contain p-1"
+          role="listbox"
+        >
+          {shifts.length === 0 ? (
+            <li className="px-2 py-4 text-center text-sm leading-relaxed text-muted-foreground">
+              אין משמרות מהיום ואילך במערכת. צרו משמרת בכרטיס &quot;יצירת משמרת&quot; למעלה (תאריך עתידי),
+              ואז חזרו לכאן.
             </li>
-          ))}
+          ) : (
+            <>
+              <li role="option" aria-selected={!value || value === noneValue}>
+                <button
+                  type="button"
+                  className="flex w-full rounded-sm px-2 py-2 text-right text-sm hover:bg-accent"
+                  onClick={() => {
+                    onValueChange("");
+                    setOpen(false);
+                    setQuery("");
+                  }}
+                >
+                  — ביטול בחירה —
+                </button>
+              </li>
+              {filtered.length === 0 ? (
+                <li className="px-2 py-4 text-center text-sm text-muted-foreground">
+                  אין תוצאות לחיפוש. נסו מילה אחרת או נקו את שורת החיפוש.
+                </li>
+              ) : (
+                filtered.map((s) => (
+                  <li key={s.id} role="option" aria-selected={value === s.id}>
+                    <button
+                      type="button"
+                      className="flex w-full rounded-sm px-2 py-2 text-right text-sm leading-snug hover:bg-accent"
+                      onClick={() => {
+                        onValueChange(s.id);
+                        setOpen(false);
+                        setQuery("");
+                      }}
+                    >
+                      {shiftLine(s)}
+                    </button>
+                  </li>
+                ))
+              )}
+            </>
+          )}
         </ul>
       </div>
     ) : null;
