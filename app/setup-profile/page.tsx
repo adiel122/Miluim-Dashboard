@@ -20,7 +20,7 @@ export default async function SetupProfilePage() {
         <div className="text-right">
           <h1 className="text-2xl font-semibold">השלמת פרופיל</h1>
           <p className="mt-1 text-sm text-muted-foreground">
-            נדרשים פרטים מלאים לפני גישה לשבצ״ק.
+            נדרשים שם מלא וטלפון תקין. שאר השדות אופציונליים.
           </p>
         </div>
         <SetupProfileForm />

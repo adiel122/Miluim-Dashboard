@@ -26,6 +26,7 @@ import {
 } from "@/components/ui/select";
 import { IDF_RANKS, MILITARY_ROLE_SUGGESTIONS } from "@/lib/constants/idf-ranks";
 import { formatAuthFlowError } from "@/lib/supabase/errors";
+import { isPhoneUniqueViolation } from "@/lib/supabase/postgres-errors";
 import { DEFAULT_REGISTER_PASSWORD } from "@/lib/auth/default-register-password";
 import {
   registrationSchema,
@@ -39,8 +40,8 @@ const defaultValues: Partial<RegistrationFormValues> = {
   password: DEFAULT_REGISTER_PASSWORD,
   first_name: "",
   last_name: "",
-  military_id: "",
   phone: "",
+  military_id: "",
   rank: undefined,
   role_description: "",
 };
@@ -73,14 +74,14 @@ export function RegistrationForm() {
     const data = raw as RegistrationValues;
     const supabase = createClient();
 
-    const meta = {
+    const meta: Record<string, string> = {
       first_name: data.first_name,
       last_name: data.last_name,
-      military_id: data.military_id,
       phone: data.phone,
-      rank: data.rank,
-      role_description: data.role_description,
     };
+    if (data.military_id) meta.military_id = data.military_id;
+    if (data.rank) meta.rank = data.rank;
+    if (data.role_description) meta.role_description = data.role_description;
 
     const redirect =
       typeof window !== "undefined" ? `${window.location.origin}/` : undefined;
@@ -103,13 +104,22 @@ export function RegistrationForm() {
       const { error: profileError } = await supabase.from("profiles").upsert(
         {
           id: auth.user.id,
-          ...meta,
+          first_name: data.first_name,
+          last_name: data.last_name,
+          phone: data.phone,
+          military_id: data.military_id ?? null,
+          rank: data.rank ?? null,
+          role_description: data.role_description ?? null,
         },
         { onConflict: "id" }
       );
       if (profileError) {
         console.error(profileError);
-        toast.error(profileError.message || "שגיאה בשמירת הפרופיל");
+        if (isPhoneUniqueViolation(profileError)) {
+          toast.error("מספר הטלפון כבר רשום במערכת — לא ניתן להשתמש בו פעמיים");
+        } else {
+          toast.error(profileError.message || "שגיאה בשמירת הפרופיל");
+        }
         return;
       }
       toast.success("נרשמת בהצלחה");
@@ -126,7 +136,8 @@ export function RegistrationForm() {
       <CardHeader className="text-right">
         <CardTitle className="text-xl">הרשמה</CardTitle>
         <CardDescription>
-          יצירת חשבון עם פרטי מילואים. כבר רשום?{" "}
+          חובה: מייל, סיסמה, שם מלא וטלפון. שאר הפרטים אופציונליים — ניתן להשלים אחר כך או שמנהל יעדכן
+          בלוח הניהול. כבר רשום?{" "}
           <Link href="/login" className="text-primary underline-offset-4 hover:underline">
             התחברות
           </Link>
@@ -170,13 +181,13 @@ export function RegistrationForm() {
 
           <div
             role="group"
-            aria-label="פרטים אישיים"
+            aria-label="פרטים חובה"
             className="grid gap-4 rounded-lg border border-border/60 bg-muted/20 p-4"
           >
-            <p className="text-sm font-medium text-muted-foreground">פרטים אישיים</p>
+            <p className="text-sm font-medium text-muted-foreground">שם וטלפון (חובה)</p>
             <div className="grid gap-4 sm:grid-cols-2 sm:gap-x-4 sm:gap-y-4">
               <div className="flex flex-col gap-2">
-                <Label htmlFor="reg-first_name">שם</Label>
+                <Label htmlFor="reg-first_name">שם פרטי</Label>
                 <Input
                   id="reg-first_name"
                   dir="rtl"
@@ -202,14 +213,37 @@ export function RegistrationForm() {
                 )}
               </div>
             </div>
-            <div className="grid gap-4 sm:grid-cols-2 sm:gap-x-4 sm:gap-y-4">
-              <div className="flex flex-col gap-2">
+            <div className="flex flex-col gap-2">
+              <Label htmlFor="reg-phone">טלפון נייד</Label>
+              <Input
+                id="reg-phone"
+                dir="ltr"
+                inputMode="tel"
+                placeholder="05XXXXXXXX (10 ספרות)"
+                aria-invalid={!!errors.phone}
+                {...register("phone")}
+              />
+              <p className="text-xs text-muted-foreground">
+                מספר טלפון יכול להירשם פעם אחת בלבד במערכת.
+              </p>
+              {errors.phone && (
+                <p className="text-sm text-destructive">{errors.phone.message}</p>
+              )}
+            </div>
+          </div>
+
+          <details className="rounded-lg border border-border/50 bg-muted/10 p-4 text-right">
+            <summary className="cursor-pointer text-sm font-medium text-muted-foreground">
+              פרטים נוספים (אופציונלי)
+            </summary>
+            <div className="mt-4 grid gap-4 sm:grid-cols-2 sm:gap-x-4 sm:gap-y-4">
+              <div className="flex flex-col gap-2 sm:col-span-2">
                 <Label htmlFor="reg-military_id">מספר אישי</Label>
                 <Input
                   id="reg-military_id"
                   dir="ltr"
                   inputMode="numeric"
-                  placeholder="7 ספרות"
+                  placeholder="7 ספרות — ריק אם אין עדיין"
                   aria-invalid={!!errors.military_id}
                   {...register("military_id")}
                 />
@@ -217,22 +251,6 @@ export function RegistrationForm() {
                   <p className="text-sm text-destructive">{errors.military_id.message}</p>
                 )}
               </div>
-              <div className="flex flex-col gap-2">
-                <Label htmlFor="reg-phone">טלפון</Label>
-                <Input
-                  id="reg-phone"
-                  dir="ltr"
-                  inputMode="tel"
-                  placeholder="05XXXXXXXX"
-                  aria-invalid={!!errors.phone}
-                  {...register("phone")}
-                />
-                {errors.phone && (
-                  <p className="text-sm text-destructive">{errors.phone.message}</p>
-                )}
-              </div>
-            </div>
-            <div className="grid gap-4 sm:grid-cols-2 sm:gap-x-4 sm:gap-y-4">
               <div className="flex flex-col gap-2">
                 <Label htmlFor="reg-rank">דרגה</Label>
                 <Controller
@@ -249,7 +267,7 @@ export function RegistrationForm() {
                         className="h-10 w-full min-w-0 justify-between md:h-9"
                         aria-invalid={!!errors.rank}
                       >
-                        <SelectValue placeholder="בחר דרגה" />
+                        <SelectValue placeholder="בחר דרגה (אופציונלי)" />
                       </SelectTrigger>
                       <SelectContent>
                         {IDF_RANKS.map((r) => (
@@ -266,7 +284,7 @@ export function RegistrationForm() {
                 )}
               </div>
               <div className="flex flex-col gap-2">
-                <Label htmlFor="reg-role_description">תפקיד (לא משימתי)</Label>
+                <Label htmlFor="reg-role_description">תפקיד (תיאור)</Label>
                 <Input
                   id="reg-role_description"
                   dir="rtl"
@@ -287,7 +305,7 @@ export function RegistrationForm() {
                 )}
               </div>
             </div>
-          </div>
+          </details>
         </CardContent>
         <CardFooter className="flex flex-wrap items-center justify-between gap-3 border-t border-border/60 pt-4">
           <Link

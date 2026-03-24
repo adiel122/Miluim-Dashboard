@@ -16,6 +16,13 @@ import {
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
+import {
   Table,
   TableBody,
   TableCell,
@@ -24,7 +31,10 @@ import {
   TableRow,
 } from "@/components/ui/table";
 import { DEFAULT_REGISTER_PASSWORD } from "@/lib/auth/default-register-password";
+import { IDF_RANKS } from "@/lib/constants/idf-ranks";
+import { isPhoneUniqueViolation } from "@/lib/supabase/postgres-errors";
 import type { ProfileRow } from "@/lib/types/shabtzak";
+import { profileCoreSchema } from "@/lib/validations/profile";
 import { createClient } from "@/src/utils/supabase/client";
 
 type AdminUsersCardProps = {
@@ -55,6 +65,14 @@ export function AdminUsersCard({ profiles, profileLabel, onChanged }: AdminUsers
   const [addRank, setAddRank] = useState("");
   const [addRole, setAddRole] = useState("");
   const [activeBusyId, setActiveBusyId] = useState<string | null>(null);
+  const [editTarget, setEditTarget] = useState<ProfileRow | null>(null);
+  const [editFirst, setEditFirst] = useState("");
+  const [editLast, setEditLast] = useState("");
+  const [editPhone, setEditPhone] = useState("");
+  const [editMid, setEditMid] = useState("");
+  const [editRank, setEditRank] = useState<string>("");
+  const [editRole, setEditRole] = useState("");
+  const [editBusy, setEditBusy] = useState(false);
 
   useEffect(() => {
     void createClient()
@@ -145,7 +163,11 @@ export function AdminUsersCard({ profiles, profileLabel, onChanged }: AdminUsers
       });
       const data = (await res.json()) as { error?: string; ok?: boolean };
       if (!res.ok) {
-        toast.error(data.error ?? "יצירת משתמש נכשלה");
+        toast.error(
+          res.status === 409
+            ? (data.error ?? "מספר טלפון כבר קיים")
+            : (data.error ?? "יצירת משתמש נכשלה")
+        );
         return;
       }
       toast.success("משתמש נוצר");
@@ -223,6 +245,77 @@ export function AdminUsersCard({ profiles, profileLabel, onChanged }: AdminUsers
     [onChanged]
   );
 
+  const openEdit = (p: ProfileRow) => {
+    setEditTarget(p);
+    setEditFirst(p.first_name ?? "");
+    setEditLast(p.last_name ?? "");
+    setEditPhone(p.phone ?? "");
+    setEditMid(p.military_id ?? "");
+    setEditRank(p.rank ?? "");
+    setEditRole(p.role_description ?? "");
+  };
+
+  const closeEditDialog = (open: boolean) => {
+    if (!open) {
+      setEditTarget(null);
+      setEditFirst("");
+      setEditLast("");
+      setEditPhone("");
+      setEditMid("");
+      setEditRank("");
+      setEditRole("");
+    }
+  };
+
+  const submitEditProfile = async () => {
+    if (!editTarget) return;
+    const rankParsed =
+      editRank && (IDF_RANKS as readonly string[]).includes(editRank)
+        ? (editRank as (typeof IDF_RANKS)[number])
+        : undefined;
+    const parsed = profileCoreSchema.safeParse({
+      first_name: editFirst,
+      last_name: editLast,
+      phone: editPhone,
+      military_id: editMid,
+      rank: rankParsed,
+      role_description: editRole,
+    });
+    if (!parsed.success) {
+      toast.error(parsed.error.issues[0]?.message ?? "נתונים לא תקינים");
+      return;
+    }
+    const d = parsed.data;
+    setEditBusy(true);
+    try {
+      const supabase = createClient();
+      const { error } = await supabase
+        .from("profiles")
+        .update({
+          first_name: d.first_name,
+          last_name: d.last_name,
+          phone: d.phone,
+          military_id: d.military_id ?? null,
+          rank: d.rank ?? null,
+          role_description: d.role_description ?? null,
+        })
+        .eq("id", editTarget.id);
+      if (error) {
+        if (isPhoneUniqueViolation(error)) {
+          toast.error("מספר הטלפון כבר רשום למשתמש אחר");
+        } else {
+          toast.error(error.message);
+        }
+        return;
+      }
+      toast.success("הפרופיל עודכן");
+      closeEditDialog(false);
+      onChanged();
+    } finally {
+      setEditBusy(false);
+    }
+  };
+
   return (
     <>
       <Card>
@@ -230,11 +323,13 @@ export function AdminUsersCard({ profiles, profileLabel, onChanged }: AdminUsers
           <div>
             <CardTitle>ניהול משתמשים</CardTitle>
             <CardDescription>
-              הוספת משתמשים, סיסמה, פעיל / לא פעיל (חסימת התחברות), ומחיקה. דורש ב-Supabase את קובץ{" "}
+              חיילים נרשמים בעצמם (שם + טלפון חובה); כאן מגדירים מנהל, עורכים פרטים ומנהלים חשבון. טלפון
+              לא יכול להופיע פעמיים — הריצו ב־Supabase גם{" "}
               <span dir="ltr" className="font-mono text-xs">
-                profiles_is_active.sql
-              </span>{" "}
-              ו־<span className="font-mono text-xs">SUPABASE_SERVICE_ROLE_KEY</span> בשרת.
+                profiles_phone_unique.sql
+              </span>
+              . דורש <span className="font-mono text-xs">profiles_is_active.sql</span> ו־
+              <span className="font-mono text-xs">SUPABASE_SERVICE_ROLE_KEY</span>.
             </CardDescription>
           </div>
           <Button type="button" onClick={() => setAddOpen(true)}>
@@ -249,6 +344,7 @@ export function AdminUsersCard({ profiles, profileLabel, onChanged }: AdminUsers
                 <TableHead className="text-right">מספר אישי</TableHead>
                 <TableHead className="text-right">טלפון</TableHead>
                 <TableHead className="text-right">פעיל</TableHead>
+                <TableHead className="text-right">עריכה</TableHead>
                 <TableHead className="text-right">סיסמה</TableHead>
                 <TableHead className="text-right">מנהל</TableHead>
                 <TableHead className="text-right">מחיקה</TableHead>
@@ -280,6 +376,18 @@ export function AdminUsersCard({ profiles, profileLabel, onChanged }: AdminUsers
                         title={self ? "לא ניתן להשבית את עצמך" : undefined}
                         aria-label="פעיל"
                       />
+                    </TableCell>
+                    <TableCell>
+                      <Button
+                        type="button"
+                        variant="secondary"
+                        size="sm"
+                        className="whitespace-nowrap"
+                        disabled={!isProfileActive(p)}
+                        onClick={() => openEdit(p)}
+                      >
+                        עריכה
+                      </Button>
                     </TableCell>
                     <TableCell>
                       <Button
@@ -327,7 +435,8 @@ export function AdminUsersCard({ profiles, profileLabel, onChanged }: AdminUsers
           <DialogHeader>
             <DialogTitle className="text-right">הוספת משתמש</DialogTitle>
             <DialogDescription className="text-right">
-              נוצר חשבון Auth עם מייל מאושר; שאר שדות הפרופיל אופציונליים (ניתן להשלים אחר כך).
+              חובה: מייל וסיסמה. שם וטלפון מומלץ — אפשר להשלים ב&quot;עריכה&quot; אחרי יצירה. טלפון לא יכול
+              לחזור על עצמו במערכת.
             </DialogDescription>
           </DialogHeader>
           <div className="grid gap-3 text-right">
@@ -403,6 +512,80 @@ export function AdminUsersCard({ profiles, profileLabel, onChanged }: AdminUsers
                 onClick={() => void submitAddUser()}
               >
                 {addBusy ? "יוצר…" : "יצירת משתמש"}
+              </Button>
+            </div>
+          </div>
+        </DialogContent>
+      </Dialog>
+
+      <Dialog open={editTarget != null} onOpenChange={closeEditDialog}>
+        <DialogContent className="max-h-[90vh] overflow-y-auto sm:max-w-md" showCloseButton>
+          <DialogHeader>
+            <DialogTitle className="text-right">עריכת משתמש</DialogTitle>
+            <DialogDescription className="text-right">
+              שם מלא וטלפון חובה. מספר טלפון ייחודי במערכת. סימון &quot;מנהל&quot; נשאר בטבלה הראשית.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="grid gap-3 text-right">
+            <div className="grid gap-2 sm:grid-cols-2 sm:gap-2">
+              <div className="grid gap-2">
+                <Label htmlFor="ed-fn">שם פרטי</Label>
+                <Input id="ed-fn" value={editFirst} onChange={(e) => setEditFirst(e.target.value)} />
+              </div>
+              <div className="grid gap-2">
+                <Label htmlFor="ed-ln">שם משפחה</Label>
+                <Input id="ed-ln" value={editLast} onChange={(e) => setEditLast(e.target.value)} />
+              </div>
+            </div>
+            <div className="grid gap-2">
+              <Label htmlFor="ed-ph">טלפון (10 ספרות, 0 מוביל)</Label>
+              <Input
+                id="ed-ph"
+                dir="ltr"
+                className="text-left"
+                value={editPhone}
+                onChange={(e) => setEditPhone(e.target.value)}
+              />
+            </div>
+            <div className="grid gap-2">
+              <Label htmlFor="ed-mid">מספר אישי (אופציונלי)</Label>
+              <Input
+                id="ed-mid"
+                dir="ltr"
+                className="text-left"
+                value={editMid}
+                onChange={(e) => setEditMid(e.target.value)}
+              />
+            </div>
+            <div className="grid gap-2">
+              <Label htmlFor="ed-rank">דרגה</Label>
+              <Select
+                value={editRank || "__none__"}
+                onValueChange={(v) => setEditRank(v == null || v === "__none__" ? "" : v)}
+              >
+                <SelectTrigger id="ed-rank" className="w-full justify-between">
+                  <SelectValue placeholder="ללא" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="__none__">ללא</SelectItem>
+                  {IDF_RANKS.map((r) => (
+                    <SelectItem key={r} value={r}>
+                      {r}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+            <div className="grid gap-2">
+              <Label htmlFor="ed-role">תפקיד (תיאור)</Label>
+              <Input id="ed-role" value={editRole} onChange={(e) => setEditRole(e.target.value)} />
+            </div>
+            <div className="flex flex-wrap justify-end gap-2 pt-2">
+              <Button type="button" variant="outline" disabled={editBusy} onClick={() => closeEditDialog(false)}>
+                ביטול
+              </Button>
+              <Button type="button" disabled={editBusy} onClick={() => void submitEditProfile()}>
+                {editBusy ? "שומר…" : "שמירה"}
               </Button>
             </div>
           </div>

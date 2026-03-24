@@ -30,6 +30,7 @@ import {
   type ProfileCoreValues,
   type ProfileFormInput,
 } from "@/lib/validations/profile";
+import { isPhoneUniqueViolation } from "@/lib/supabase/postgres-errors";
 import { createClient } from "@/src/utils/supabase/client";
 
 export function SetupProfileForm() {
@@ -71,16 +72,20 @@ export function SetupProfileForm() {
         id: user.id,
         first_name: data.first_name,
         last_name: data.last_name,
-        military_id: data.military_id,
         phone: data.phone,
-        rank: data.rank,
-        role_description: data.role_description,
+        military_id: data.military_id ?? null,
+        rank: data.rank ?? null,
+        role_description: data.role_description ?? null,
       },
       { onConflict: "id" }
     );
 
     if (error) {
-      toast.error(error.message);
+      if (isPhoneUniqueViolation(error)) {
+        toast.error("מספר הטלפון כבר רשום במערכת — לא ניתן להשתמש בו פעמיים");
+      } else {
+        toast.error(error.message);
+      }
       return;
     }
 
@@ -94,20 +99,20 @@ export function SetupProfileForm() {
       <CardHeader className="text-right">
         <CardTitle className="text-xl">השלמת פרופיל</CardTitle>
         <CardDescription>
-          יש למלא פרטים לפני כניסה לשבצ״ק. הפרטים נשמרים בפרופיל המילואים.
+          חובה: שם מלא וטלפון. שאר הפרטים אופציונליים — ניתן להשלים אחר כך או דרך מנהל בלוח הניהול.
         </CardDescription>
       </CardHeader>
       <form method="post" onSubmit={onSubmit} noValidate>
         <CardContent className="grid gap-5 text-right">
           <div
             role="group"
-            aria-label="פרטים אישיים"
+            aria-label="חובה"
             className="grid gap-4 rounded-lg border border-border/60 bg-muted/20 p-4"
           >
-            <p className="text-sm font-medium text-muted-foreground">פרטים אישיים</p>
+            <p className="text-sm font-medium text-muted-foreground">שם וטלפון (חובה)</p>
             <div className="grid gap-4 sm:grid-cols-2 sm:gap-x-4 sm:gap-y-4">
               <div className="flex flex-col gap-2">
-                <Label htmlFor="sp-first_name">שם</Label>
+                <Label htmlFor="sp-first_name">שם פרטי</Label>
                 <Input
                   id="sp-first_name"
                   dir="rtl"
@@ -131,14 +136,34 @@ export function SetupProfileForm() {
                 )}
               </div>
             </div>
-            <div className="grid gap-4 sm:grid-cols-2 sm:gap-x-4 sm:gap-y-4">
-              <div className="flex flex-col gap-2">
+            <div className="flex flex-col gap-2">
+              <Label htmlFor="sp-phone">טלפון נייד</Label>
+              <Input
+                id="sp-phone"
+                dir="ltr"
+                inputMode="tel"
+                placeholder="05XXXXXXXX"
+                aria-invalid={!!errors.phone}
+                {...register("phone")}
+              />
+              {errors.phone && (
+                <p className="text-sm text-destructive">{errors.phone.message}</p>
+              )}
+            </div>
+          </div>
+
+          <details className="rounded-lg border border-border/50 bg-muted/10 p-4 text-right">
+            <summary className="cursor-pointer text-sm font-medium text-muted-foreground">
+              פרטים נוספים (אופציונלי)
+            </summary>
+            <div className="mt-4 grid gap-4 sm:grid-cols-2 sm:gap-x-4 sm:gap-y-4">
+              <div className="flex flex-col gap-2 sm:col-span-2">
                 <Label htmlFor="sp-military_id">מספר אישי</Label>
                 <Input
                   id="sp-military_id"
                   dir="ltr"
                   inputMode="numeric"
-                  placeholder="7 ספרות"
+                  placeholder="7 ספרות — ריק אם אין"
                   aria-invalid={!!errors.military_id}
                   {...register("military_id")}
                 />
@@ -146,22 +171,6 @@ export function SetupProfileForm() {
                   <p className="text-sm text-destructive">{errors.military_id.message}</p>
                 )}
               </div>
-              <div className="flex flex-col gap-2">
-                <Label htmlFor="sp-phone">טלפון</Label>
-                <Input
-                  id="sp-phone"
-                  dir="ltr"
-                  inputMode="tel"
-                  placeholder="05XXXXXXXX"
-                  aria-invalid={!!errors.phone}
-                  {...register("phone")}
-                />
-                {errors.phone && (
-                  <p className="text-sm text-destructive">{errors.phone.message}</p>
-                )}
-              </div>
-            </div>
-            <div className="grid gap-4 sm:grid-cols-2 sm:gap-x-4 sm:gap-y-4">
               <div className="flex flex-col gap-2">
                 <Label htmlFor="sp-rank">דרגה</Label>
                 <Controller
@@ -176,7 +185,7 @@ export function SetupProfileForm() {
                         id="sp-rank"
                         className="h-10 w-full justify-between md:h-9"
                       >
-                        <SelectValue placeholder="בחר דרגה" />
+                        <SelectValue placeholder="אופציונלי" />
                       </SelectTrigger>
                       <SelectContent>
                         {IDF_RANKS.map((r) => (
@@ -211,7 +220,7 @@ export function SetupProfileForm() {
                 )}
               </div>
             </div>
-          </div>
+          </details>
         </CardContent>
         <CardFooter className="flex flex-wrap justify-between gap-3 border-t border-border/60 pt-4">
           <Link href="/login" className="text-sm text-muted-foreground hover:text-foreground">

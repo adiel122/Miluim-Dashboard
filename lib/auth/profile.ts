@@ -1,23 +1,14 @@
 import { createClient } from "@/lib/supabase/server";
 import type { ProfileRow } from "@/lib/types/shabtzak";
 
+/** מינימום לגישה ללוח ניהול / שבצ״ק: שם + טלפון תקין בלבד */
 export function isProfileComplete(p: ProfileRow | null | undefined): boolean {
   if (!p) return false;
-  const fields = [
-    p.first_name,
-    p.last_name,
-    p.military_id,
-    p.phone,
-    p.rank,
-    p.role_description,
-  ];
-  if (!fields.every((s) => typeof s === "string" && s.trim().length > 0)) {
-    return false;
-  }
-  return (
-    /^\d{7}$/.test((p.military_id ?? "").replace(/\D/g, "")) &&
-    /^0\d{9}$/.test((p.phone ?? "").replace(/\D/g, ""))
-  );
+  const fn = (p.first_name ?? "").trim();
+  const ln = (p.last_name ?? "").trim();
+  const ph = (p.phone ?? "").replace(/\D/g, "");
+  if (!fn || !ln) return false;
+  return /^0\d{9}$/.test(ph);
 }
 
 export async function getSessionUser() {

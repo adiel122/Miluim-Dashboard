@@ -4,29 +4,41 @@ import { IDF_RANKS } from "@/lib/constants/idf-ranks";
 
 const digitsOnly = (s: string) => s.replace(/\D/g, "");
 
-/** שדות פרופיל משותפים (הרשמה / השלמת פרופיל) */
-export const profileCoreSchema = z.object({
+/** שם + טלפון — חובה בהרשמה / השלמת פרופיל */
+export const profileMinimalSchema = z.object({
   first_name: z.string().trim().min(1, "שדה חובה"),
   last_name: z.string().trim().min(1, "שדה חובה"),
-  military_id: z
-    .string()
-    .transform(digitsOnly)
-    .refine((v) => /^\d{7}$/.test(v), {
-      message: "מספר אישי חייב להכיל בדיוק 7 ספרות",
-    }),
   phone: z
     .string()
     .transform(digitsOnly)
     .refine((v) => /^0\d{9}$/.test(v), {
       message: "מספר טלפון ישראלי לא תקין (10 ספרות, כולל 0 מוביל)",
     }),
-  rank: z.enum(IDF_RANKS, { message: "בחר דרגה" }),
-  role_description: z
-    .string()
-    .trim()
-    .min(1, "שדה חובה")
-    .max(200, "עד 200 תווים"),
 });
 
+/** שדות נוספים — לא חובה */
+export const profileOptionalFieldsSchema = z.object({
+  military_id: z.preprocess(
+    (v) => digitsOnly(String(v ?? "")),
+    z
+      .string()
+      .refine((v) => v === "" || /^\d{7}$/.test(v), {
+        message: "מספר אישי — בדיוק 7 ספרות או ריק",
+      })
+      .transform((v) => (v === "" ? undefined : v))
+  ),
+  rank: z.enum(IDF_RANKS as unknown as [string, ...string[]]).optional(),
+  role_description: z
+    .string()
+    .optional()
+    .transform((s) => (s ?? "").trim())
+    .refine((s) => s.length <= 200, { message: "עד 200 תווים" })
+    .transform((s) => (s === "" ? undefined : s)),
+});
+
+/** הרשמה + השלמת פרופיל: חובה שם וטלפון; השאר אופציונלי */
+export const profileCoreSchema = profileMinimalSchema.merge(profileOptionalFieldsSchema);
+
+export type ProfileMinimalValues = z.output<typeof profileMinimalSchema>;
 export type ProfileCoreValues = z.output<typeof profileCoreSchema>;
 export type ProfileFormInput = z.input<typeof profileCoreSchema>;

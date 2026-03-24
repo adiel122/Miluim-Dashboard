@@ -7,6 +7,7 @@ import { toast } from "sonner";
 import { ProfileSearchSelect } from "@/components/admin/profile-search-select";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+import { DateFieldCalendar } from "@/components/ui/date-field-calendar";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import {
@@ -34,6 +35,20 @@ export type AfterHoursRow = {
   created_at: string;
 };
 
+/** חייל &quot;בבית&quot; (באפטר) אם בתאריך הנתון הוא בתוך טווח יציאה–סיום */
+export function isProfileOnAfterHoursAtDate(
+  profileId: string,
+  dateYmd: string,
+  outings: AfterHoursRow[]
+): boolean {
+  return outings.some((r) => {
+    if (r.profile_id !== profileId) return false;
+    if (dateYmd < r.outing_date) return false;
+    if (r.end_date != null && dateYmd > r.end_date) return false;
+    return true;
+  });
+}
+
 type AfterHoursCardProps = {
   profiles: ProfileRow[];
   profileLabel: (p: ProfileRow) => string;
@@ -51,6 +66,7 @@ export function AfterHoursCard({ profiles, profileLabel, onMutate }: AfterHoursC
   const [note, setNote] = useState("");
   const [saving, setSaving] = useState(false);
   const [tableMissing, setTableMissing] = useState(false);
+  const [presenceDate, setPresenceDate] = useState(() => new Date().toISOString().slice(0, 10));
 
   const load = useCallback(async () => {
     setTableMissing(false);
@@ -130,6 +146,38 @@ export function AfterHoursCard({ profiles, profileLabel, onMutate }: AfterHoursC
     await load();
     onMutate?.();
   };
+
+  const { atBase, atHome } = useMemo(() => {
+    const home: ProfileRow[] = [];
+    const base: ProfileRow[] = [];
+    for (const p of profilesForSelect) {
+      if (isProfileOnAfterHoursAtDate(p.id, presenceDate, rows)) home.push(p);
+      else base.push(p);
+    }
+    const byLabel = (a: ProfileRow, b: ProfileRow) =>
+      profileLabel(a).localeCompare(profileLabel(b), "he");
+    home.sort(byLabel);
+    base.sort(byLabel);
+    return { atBase: base, atHome: home };
+  }, [profilesForSelect, presenceDate, rows, profileLabel]);
+
+  const renderPresenceList = (list: ProfileRow[]) =>
+    list.length === 0 ? (
+      <p className="text-sm text-muted-foreground">אין רשומים</p>
+    ) : (
+      <ul className="max-h-64 space-y-1.5 overflow-y-auto text-sm">
+        {list.map((p) => (
+          <li key={p.id} className="rounded-sm px-1 py-0.5 hover:bg-muted/50">
+            <span className="font-medium">{profileLabel(p)}</span>
+            {p.phone ? (
+              <span dir="ltr" className="ms-2 text-xs text-muted-foreground">
+                {p.phone}
+              </span>
+            ) : null}
+          </li>
+        ))}
+      </ul>
+    );
 
   return (
     <Card>
@@ -252,6 +300,35 @@ export function AfterHoursCard({ profiles, profileLabel, onMutate }: AfterHoursC
                 </TableBody>
               </Table>
             </div>
+
+            <section className="space-y-4 border-t border-border pt-8" aria-label="נוכחות לפי תאריך">
+              <div>
+                <h3 className="text-base font-semibold">מי בבסיס / מי בבית (אפטר)</h3>
+                <p className="mt-1 text-sm text-muted-foreground">
+                  בוחרים תאריך: חייל עם רישום אפטר שמכסה את התאריך (מ־תאריך יציאה עד תאריך סיום כולל, או בלי
+                  תאריך סיום) מסומן תחת &quot;בבית&quot;. שאר החיילים הפעילים — תחת &quot;בבסיס&quot;.
+                </p>
+              </div>
+              <div className="grid max-w-lg gap-2">
+                <Label>תאריך לסינון</Label>
+                <DateFieldCalendar
+                  idPrefix="ah-presence"
+                  value={presenceDate}
+                  onChange={setPresenceDate}
+                />
+                <p className="text-xs text-muted-foreground">מציגים לפי {formatDateDDMMYY(presenceDate)}</p>
+              </div>
+              <div className="grid gap-4 md:grid-cols-2">
+                <div className="rounded-lg border border-border bg-card p-4">
+                  <h4 className="mb-3 text-sm font-semibold">בבסיס ({atBase.length})</h4>
+                  {renderPresenceList(atBase)}
+                </div>
+                <div className="rounded-lg border border-sky-200/90 bg-sky-50/70 p-4 dark:border-sky-900/80 dark:bg-sky-950/35">
+                  <h4 className="mb-3 text-sm font-semibold">בבית / אפטר ({atHome.length})</h4>
+                  {renderPresenceList(atHome)}
+                </div>
+              </div>
+            </section>
           </>
         )}
       </CardContent>

@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { z } from "zod";
 
 import { requireAdmin } from "@/lib/auth/require-admin-api";
+import { isPhoneUniqueViolation } from "@/lib/supabase/postgres-errors";
 import { createServiceRoleClient } from "@/lib/supabase/service-role";
 
 const bodySchema = z
@@ -60,6 +61,13 @@ export async function POST(request: Request) {
   const b = parsed.data;
   const militaryId = (b.military_id ?? "").replace(/\D/g, "");
   const phone = (b.phone ?? "").replace(/\D/g, "");
+
+  if (phone) {
+    const { data: phoneTaken } = await service.from("profiles").select("id").eq("phone", phone).maybeSingle();
+    if (phoneTaken) {
+      return NextResponse.json({ error: "מספר הטלפון כבר רשום במערכת" }, { status: 409 });
+    }
+  }
   const meta: Record<string, string> = {};
   if (b.first_name?.trim()) meta.first_name = b.first_name.trim();
   if (b.last_name?.trim()) meta.last_name = b.last_name.trim();
@@ -97,6 +105,9 @@ export async function POST(request: Request) {
 
   if (profErr) {
     await service.auth.admin.deleteUser(data.user.id);
+    if (isPhoneUniqueViolation(profErr)) {
+      return NextResponse.json({ error: "מספר הטלפון כבר רשום במערכת" }, { status: 409 });
+    }
     return NextResponse.json({ error: profErr.message }, { status: 400 });
   }
 

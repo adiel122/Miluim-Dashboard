@@ -363,6 +363,7 @@ export function AdminDashboard() {
   const profileLabel = useCallback((p: ProfileRow) => {
     const name = [p.first_name, p.last_name].filter(Boolean).join(" ").trim();
     if (name) return name;
+    if (p.phone) return p.phone;
     if (p.military_id) return `חייל ${p.military_id}`;
     return p.id.slice(0, 8);
   }, []);
