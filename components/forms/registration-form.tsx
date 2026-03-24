@@ -26,15 +26,13 @@ import {
 } from "@/components/ui/select";
 import { IDF_RANKS, MILITARY_ROLE_SUGGESTIONS } from "@/lib/constants/idf-ranks";
 import { formatAuthFlowError } from "@/lib/supabase/errors";
+import { DEFAULT_REGISTER_PASSWORD } from "@/lib/auth/default-register-password";
 import {
   registrationSchema,
   type RegistrationFormValues,
   type RegistrationValues,
 } from "@/lib/validations/registration";
 import { createClient } from "@/src/utils/supabase/client";
-
-/** ברירת מחדל לנוחות בשיבוץ — כדאי להחליף בשדה או אחרי ההרשמה */
-const DEFAULT_REGISTER_PASSWORD = "Gdud794!";
 
 const defaultValues: Partial<RegistrationFormValues> = {
   email: "",
