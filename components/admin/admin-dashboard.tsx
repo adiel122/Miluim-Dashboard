@@ -152,7 +152,7 @@ export function AdminDashboard() {
     const { data } = await supabase
       .from("profiles")
       .select(
-        "id, first_name, last_name, military_id, phone, rank, role_description, is_admin"
+        "id, first_name, last_name, military_id, phone, rank, role_description, is_admin, is_active"
       )
       .order("last_name", { ascending: true });
     setProfiles((data as ProfileRow[]) ?? []);

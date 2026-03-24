@@ -16,6 +16,7 @@ export function LoginForm() {
   const router = useRouter();
   const searchParams = useSearchParams();
   const nextPath = searchParams.get("next") ?? "/shabtzak";
+  const inactiveReason = searchParams.get("reason") === "inactive";
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [loading, setLoading] = useState(false);
@@ -45,6 +46,11 @@ export function LoginForm() {
       </CardHeader>
       <form method="post" onSubmit={signInEmail}>
         <CardContent className="grid gap-5 text-right">
+          {inactiveReason && (
+            <p className="rounded-md border border-destructive/40 bg-destructive/10 px-3 py-2 text-sm text-destructive">
+              החשבון הושבת. פנה למנהל המערכת להפעלה מחדש.
+            </p>
+          )}
           <div className="flex flex-col gap-2">
             <Label htmlFor="login-email">מייל</Label>
             <Input

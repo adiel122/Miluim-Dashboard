@@ -323,3 +323,4 @@ create policy "after_hours_admin_delete"
 
 -- פרודקשן: לאחר שהסכימה רצה, הרץ גם supabase/rls_lockdown_anon.sql
 -- כדי שללא התחברות מפתח ה-anon לא יקבל גישה לטבלאות בכלל (מעבר ל-RLS).
+-- לניהול משתמשים (פעיל/לא פעיל): הרץ supabase/profiles_is_active.sql

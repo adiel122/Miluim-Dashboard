@@ -6,7 +6,6 @@ import { createServiceRoleClient } from "@/lib/supabase/service-role";
 
 const bodySchema = z.object({
   userId: z.string().uuid(),
-  password: z.string().min(8, "לפחות 8 תווים").max(72, "סיסמה ארוכה מדי"),
 });
 
 export async function POST(request: Request) {
@@ -22,8 +21,11 @@ export async function POST(request: Request) {
 
   const parsed = bodySchema.safeParse(json);
   if (!parsed.success) {
-    const msg = parsed.error.issues[0]?.message ?? "נתונים לא תקינים";
-    return NextResponse.json({ error: msg }, { status: 400 });
+    return NextResponse.json({ error: "נתונים לא תקינים" }, { status: 400 });
+  }
+
+  if (parsed.data.userId === admin.userId) {
+    return NextResponse.json({ error: "לא ניתן למחוק את עצמך" }, { status: 400 });
   }
 
   let service;
@@ -36,10 +38,7 @@ export async function POST(request: Request) {
     );
   }
 
-  const { error } = await service.auth.admin.updateUserById(parsed.data.userId, {
-    password: parsed.data.password,
-  });
-
+  const { error } = await service.auth.admin.deleteUser(parsed.data.userId);
   if (error) {
     return NextResponse.json({ error: error.message }, { status: 400 });
   }

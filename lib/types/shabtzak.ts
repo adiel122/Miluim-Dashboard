@@ -12,6 +12,8 @@ export type ProfileRow = {
   rank: string | null;
   role_description: string | null;
   is_admin: boolean;
+  /** false = מושבת (לא יכול להתחבר); דורש עמודה is_active ב-Supabase */
+  is_active?: boolean;
 };
 
 export type ShiftRow = {
