@@ -11,8 +11,11 @@ import { AfterHoursCard } from "@/components/admin/after-hours-card";
 import { AdminUsersCard } from "@/components/admin/admin-users-card";
 import { JusticeLeagueCard } from "@/components/admin/justice-league-card";
 import { ProfileSearchSelect } from "@/components/admin/profile-search-select";
-import { RosterLayoutCard } from "@/components/admin/roster-layout-card";
 import { ShiftSearchSelect } from "@/components/admin/shift-search-select";
+import { YmdDateInputs } from "@/components/admin/ymd-date-inputs";
+import { ShiftBoardShiftCards } from "@/components/shabtzak/shift-board-cards";
+import { SoldierContactDialog } from "@/components/shabtzak/soldier-contact-dialog";
+import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { buttonVariants } from "@/components/ui/button-variants";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
@@ -27,6 +30,7 @@ import {
 } from "@/components/ui/select";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { profilesForAssignmentMatrix } from "@/lib/shabtzak/profile-filters";
+import { enrichShiftForBoardPreview } from "@/lib/shabtzak/enrich-shift-board";
 import {
   layoutFromFormFields,
   parsePositionsInput,
@@ -46,18 +50,19 @@ import { createClient } from "@/src/utils/supabase/client";
 const NONE = "__none__";
 
 type ShiftListRow = ShiftRow & {
-  assignments?: { profile_id: string; team_number: number; position: string }[];
+  assignments?: { id?: string; profile_id: string; team_number: number; position: string }[];
 };
 
-type RosterState = {
-  team_count: number;
-  positions: string[];
+const ROSTER_FALLBACK: { team_count: number; positions: string[] } = {
+  team_count: 3,
+  positions: [...DEFAULT_ROSTER_POSITIONS],
 };
 
 type ShiftEditMeta = {
   shift_date: string;
   shift_type: "day" | "night";
   start_time: string;
+  end_time: string;
   mission_name: string;
   team_count: number;
   positions_text: string;
@@ -67,21 +72,24 @@ function matrixKey(team: number, pos: string) {
   return `${team}-${pos}`;
 }
 
+function toSqlTime(t: string) {
+  return t.length === 5 ? `${t}:00` : t;
+}
+
 export function AdminDashboard() {
   const [upcomingShifts, setUpcomingShifts] = useState(0);
   const [afterHoursCount, setAfterHoursCount] = useState(0);
   const [shifts, setShifts] = useState<ShiftListRow[]>([]);
   const [profiles, setProfiles] = useState<ProfileRow[]>([]);
-  const [roster, setRoster] = useState<RosterState>({
-    team_count: 3,
-    positions: [...DEFAULT_ROSTER_POSITIONS],
-  });
   const [selectedShiftId, setSelectedShiftId] = useState<string>("");
   const [matrix, setMatrix] = useState<Record<string, string | undefined>>({});
   const [constraintIds, setConstraintIds] = useState<Set<string>>(new Set());
   const [createMatrix, setCreateMatrix] = useState<Record<string, string | undefined>>({});
   const [createConstraintIds, setCreateConstraintIds] = useState<Set<string>>(new Set());
   const [editMeta, setEditMeta] = useState<ShiftEditMeta | null>(null);
+  const [previewContact, setPreviewContact] = useState<ProfileRow | null>(null);
+  const [previewDialogOpen, setPreviewDialogOpen] = useState(false);
+  const [previewConstraintIds, setPreviewConstraintIds] = useState<Set<string>>(new Set());
   const [loadingMeta, setLoadingMeta] = useState(true);
 
   const shiftsRef = useRef(shifts);
@@ -94,29 +102,13 @@ export function AdminDashboard() {
       shift_type: "day" as const,
       mission_name: "כוננות לאתרי הרס",
       start_time: "08:00",
+      end_time: "16:00",
       team_count: 3,
       positions_text: DEFAULT_ROSTER_POSITIONS.join(", "),
     },
   });
 
   const today = new Date().toISOString().slice(0, 10);
-
-  const loadRoster = useCallback(async () => {
-    const supabase = createClient();
-    const { data, error } = await supabase
-      .from("admin_roster_settings")
-      .select("team_count, positions")
-      .eq("id", 1)
-      .maybeSingle();
-    if (error || !data) return;
-    const pos =
-      (data.positions as string[])?.filter((p) => p.trim().length > 0) ??
-      [...DEFAULT_ROSTER_POSITIONS];
-    setRoster({
-      team_count: Math.min(15, Math.max(1, Number(data.team_count) || 3)),
-      positions: pos.length > 0 ? pos : [...DEFAULT_ROSTER_POSITIONS],
-    });
-  }, []);
 
   const loadSummary = useCallback(async () => {
     const supabase = createClient();
@@ -144,9 +136,11 @@ export function AdminDashboard() {
         shift_type,
         mission_name,
         start_time,
+        end_time,
+        is_published,
         team_count,
         positions,
-        assignments ( profile_id, team_number, position )
+        assignments ( id, profile_id, team_number, position )
       `
       )
       .gte("shift_date", today)
@@ -168,9 +162,9 @@ export function AdminDashboard() {
 
   const refreshAll = useCallback(async () => {
     setLoadingMeta(true);
-    await Promise.all([loadSummary(), loadShifts(), loadProfiles(), loadRoster()]);
+    await Promise.all([loadSummary(), loadShifts(), loadProfiles()]);
     setLoadingMeta(false);
-  }, [loadProfiles, loadRoster, loadShifts, loadSummary]);
+  }, [loadProfiles, loadShifts, loadSummary]);
 
   useEffect(() => {
     void refreshAll();
@@ -183,8 +177,8 @@ export function AdminDashboard() {
   const wCreateDate = shiftForm.watch("shift_date");
 
   const createLayout = useMemo(
-    () => layoutFromFormFields(wCreateTeam, wCreatePos ?? "", roster),
-    [wCreateTeam, wCreatePos, roster]
+    () => layoutFromFormFields(wCreateTeam, wCreatePos ?? "", ROSTER_FALLBACK),
+    [wCreateTeam, wCreatePos]
   );
 
   const createTeamIndices = useMemo(
@@ -221,6 +215,8 @@ export function AdminDashboard() {
       selectedShift.shift_date,
       selectedShift.shift_type,
       selectedShift.start_time,
+      selectedShift.end_time ?? "",
+      String(selectedShift.is_published ?? true),
       selectedShift.mission_name,
       selectedShift.team_count,
       (selectedShift.positions ?? []).join("\0"),
@@ -228,8 +224,8 @@ export function AdminDashboard() {
   }, [selectedShift]);
 
   const matrixLayout = useMemo(
-    () => shiftRosterForDisplay(selectedShift ?? null, roster),
-    [selectedShift, roster]
+    () => shiftRosterForDisplay(selectedShift ?? null, ROSTER_FALLBACK),
+    [selectedShift]
   );
 
   const teamIndices = useMemo(
@@ -260,10 +256,29 @@ export function AdminDashboard() {
   );
 
   useEffect(() => {
-    if (shiftForm.formState.isDirty) return;
-    shiftForm.setValue("team_count", roster.team_count);
-    shiftForm.setValue("positions_text", roster.positions.join(", "));
-  }, [roster.team_count, roster.positions.join("|"), shiftForm, shiftForm.formState.isDirty]);
+    if (!selectedShift) {
+      setPreviewConstraintIds(new Set());
+      return;
+    }
+    void (async () => {
+      const supabase = createClient();
+      const { data } = await supabase
+        .from("profile_constraints")
+        .select("profile_id")
+        .eq("constraint_date", selectedShift.shift_date);
+      setPreviewConstraintIds(new Set((data ?? []).map((c) => c.profile_id as string)));
+    })();
+  }, [selectedShift?.id, selectedShift?.shift_date]);
+
+  const previewShiftNested = useMemo(() => {
+    if (!selectedShift) return null;
+    return enrichShiftForBoardPreview(selectedShift, profiles);
+  }, [selectedShift, profiles]);
+
+  const previewConstraintMap = useMemo(() => {
+    if (!selectedShift) return {};
+    return { [selectedShift.shift_date]: previewConstraintIds };
+  }, [selectedShift, previewConstraintIds]);
 
   useEffect(() => {
     const valid = new Set<string>();
@@ -316,6 +331,7 @@ export function AdminDashboard() {
       shift_type: s.shift_type,
       mission_name: s.mission_name,
       start_time: timeInputValue(String(s.start_time)),
+      end_time: timeInputValue(String(s.end_time ?? "16:00:00")),
       team_count: s.team_count ?? 3,
       positions_text: pos.join(", "),
     });
@@ -358,7 +374,8 @@ export function AdminDashboard() {
       return;
     }
     const supabase = createClient();
-    const time = data.start_time.length === 5 ? `${data.start_time}:00` : data.start_time;
+    const startT = toSqlTime(data.start_time);
+    const endT = toSqlTime(data.end_time);
     const positions = parsePositionsInput(data.positions_text);
     const { data: inserted, error } = await supabase
       .from("shifts")
@@ -366,9 +383,11 @@ export function AdminDashboard() {
         shift_date: data.shift_date,
         shift_type: data.shift_type,
         mission_name: data.mission_name.trim(),
-        start_time: time,
+        start_time: startT,
+        end_time: endT,
         team_count: data.team_count,
         positions,
+        is_published: false,
       })
       .select("id")
       .single();
@@ -406,15 +425,16 @@ export function AdminDashboard() {
       }
     }
 
-    toast.success("משמרת נוספה עם שיבוצים");
+    toast.success("משמרת נוספה כטיוטה עם שיבוצים — פרסם משבצ״ק כשמוכן");
     setCreateMatrix({});
     shiftForm.reset({
       shift_date: "",
       shift_type: "day",
       mission_name: "כוננות לאתרי הרס",
       start_time: "08:00",
-      team_count: roster.team_count,
-      positions_text: roster.positions.join(", "),
+      end_time: "16:00",
+      team_count: ROSTER_FALLBACK.team_count,
+      positions_text: ROSTER_FALLBACK.positions.join(", "),
     });
     await loadShifts();
     await loadSummary();
@@ -431,8 +451,8 @@ export function AdminDashboard() {
       return;
     }
     const tc = Math.min(15, Math.max(1, Math.floor(Number(editMeta.team_count)) || 3));
-    const time =
-      editMeta.start_time.length === 5 ? `${editMeta.start_time}:00` : editMeta.start_time;
+    const startT = toSqlTime(editMeta.start_time);
+    const endT = toSqlTime(editMeta.end_time);
     const supabase = createClient();
     const { error } = await supabase
       .from("shifts")
@@ -440,7 +460,8 @@ export function AdminDashboard() {
         shift_date: editMeta.shift_date,
         shift_type: editMeta.shift_type,
         mission_name: editMeta.mission_name.trim(),
-        start_time: time,
+        start_time: startT,
+        end_time: endT,
         team_count: tc,
         positions,
       })
@@ -463,6 +484,44 @@ export function AdminDashboard() {
     }
 
     toast.success("פרטי המשמרת עודכנו");
+    await loadShifts();
+    await loadSummary();
+  };
+
+  const publishShift = async () => {
+    if (!selectedShiftId) {
+      toast.error("בחר משמרת");
+      return;
+    }
+    const supabase = createClient();
+    const { error } = await supabase
+      .from("shifts")
+      .update({ is_published: true })
+      .eq("id", selectedShiftId);
+    if (error) {
+      toast.error(error.message);
+      return;
+    }
+    toast.success("פורסם לשבצ״ק הציבורי");
+    await loadShifts();
+    await loadSummary();
+  };
+
+  const unpublishShift = async () => {
+    if (!selectedShiftId) {
+      toast.error("בחר משמרת");
+      return;
+    }
+    const supabase = createClient();
+    const { error } = await supabase
+      .from("shifts")
+      .update({ is_published: false })
+      .eq("id", selectedShiftId);
+    if (error) {
+      toast.error(error.message);
+      return;
+    }
+    toast.success("המשמרת הוחזרה לטיוטה — לא מוצגת בשבצ״ק");
     await loadShifts();
     await loadSummary();
   };
@@ -590,19 +649,11 @@ export function AdminDashboard() {
               </Card>
             </div>
 
-            <RosterLayoutCard
-              onSaved={(layout) => {
-                setRoster(layout);
-                void loadShifts();
-              }}
-            />
-
             <Card>
         <CardHeader>
           <CardTitle>יצירת משמרת</CardTitle>
           <CardDescription>
-            לכל משימה מגדירים כאן מספר צוותים, תפקידים, ואפשר לשבץ חיילים ישירות לפני שמירה. תאריך
-            בשדה ISO (שנה־חודש־יום) — השדה כפוי לכיוון LTR כדי שהמקטע &quot;יום&quot; (DD) יהיה נגיש.
+            מגדירים תאריך (שנה / חודש / יום), שעת התחלה וסיום, מבנה צוותים ושיבוץ חיילים לפני שמירה.
           </CardDescription>
         </CardHeader>
         <CardContent>
@@ -612,20 +663,14 @@ export function AdminDashboard() {
             onSubmit={(e) => void onCreateShift(e)}
           >
             <div className="grid gap-2 sm:col-span-2">
-              <Label htmlFor="ad-date">תאריך (YYYY-MM-DD)</Label>
-              <div
-                dir="ltr"
-                lang="en"
-                className="w-full min-w-0 isolate [unicode-bidi:isolate]"
-              >
-                <Input
-                  id="ad-date"
-                  type="date"
-                  className="w-full text-left font-mono"
-                  autoComplete="off"
-                  {...shiftForm.register("shift_date")}
-                />
-              </div>
+              <Label>תאריך</Label>
+              <YmdDateInputs
+                idPrefix="ad"
+                value={shiftForm.watch("shift_date") ?? ""}
+                onChange={(v) =>
+                  shiftForm.setValue("shift_date", v, { shouldValidate: true, shouldDirty: true })
+                }
+              />
               {shiftForm.formState.errors.shift_date && (
                 <p className="text-sm text-destructive">
                   {shiftForm.formState.errors.shift_date.message}
@@ -650,10 +695,10 @@ export function AdminDashboard() {
               </Select>
             </div>
             <div className="grid gap-2">
-              <Label htmlFor="ad-time">שעת התחלה</Label>
+              <Label htmlFor="ad-time-start">שעת התחלה</Label>
               <div dir="ltr" lang="en" className="isolate [unicode-bidi:isolate]">
                 <Input
-                  id="ad-time"
+                  id="ad-time-start"
                   type="time"
                   className="text-left font-mono"
                   {...shiftForm.register("start_time")}
@@ -662,6 +707,22 @@ export function AdminDashboard() {
               {shiftForm.formState.errors.start_time && (
                 <p className="text-sm text-destructive">
                   {shiftForm.formState.errors.start_time.message}
+                </p>
+              )}
+            </div>
+            <div className="grid gap-2">
+              <Label htmlFor="ad-time-end">שעת סיום</Label>
+              <div dir="ltr" lang="en" className="isolate [unicode-bidi:isolate]">
+                <Input
+                  id="ad-time-end"
+                  type="time"
+                  className="text-left font-mono"
+                  {...shiftForm.register("end_time")}
+                />
+              </div>
+              {shiftForm.formState.errors.end_time && (
+                <p className="text-sm text-destructive">
+                  {shiftForm.formState.errors.end_time.message}
                 </p>
               )}
             </div>
@@ -763,8 +824,8 @@ export function AdminDashboard() {
         <CardHeader>
           <CardTitle>מטריצת שיבוצים</CardTitle>
           <CardDescription>
-            המבנה נלקח מהמשימה שנבחרה (צוותים ותפקידים שנשמרו בה). כפילות חייל מסומנת באדום לפני
-            שמירה
+            עורכים כאן שיבוצים; למטה תצוגה מקדימה כמו בשבצ״ק. משמרת חדשה נשמרת כטיוטה עד לחיצה על
+            &quot;פרסם לשבצ״ק&quot;. כפילות חייל מסומנת באדום לפני שמירה.
           </CardDescription>
         </CardHeader>
         <CardContent className="space-y-4 overflow-visible">
@@ -777,6 +838,47 @@ export function AdminDashboard() {
             />
           </div>
 
+          {selectedShift && (
+            <div className="flex flex-wrap items-center justify-end gap-2">
+              {selectedShift.is_published === false ? (
+                <Badge variant="outline" className="border-amber-600 text-amber-900">
+                  טיוטה
+                </Badge>
+              ) : (
+                <Badge variant="secondary">מפורסם בשבצ״ק</Badge>
+              )}
+              {selectedShift.is_published === false ? (
+                <Button type="button" onClick={() => void publishShift()}>
+                  פרסם לשבצ״ק הציבורי
+                </Button>
+              ) : (
+                <Button type="button" variant="outline" onClick={() => void unpublishShift()}>
+                  החזר לטיוטה
+                </Button>
+              )}
+            </div>
+          )}
+
+          {selectedShift && previewShiftNested && (
+            <div className="space-y-3 rounded-lg border border-amber-200/90 bg-amber-50/50 p-4">
+              <p className="text-sm font-semibold text-amber-950">תצוגה מקדימה — כמו בשבצ״ק</p>
+              <p className="text-xs text-muted-foreground">
+                {selectedShift.is_published === false
+                  ? "הציבור עדיין לא רואה משמרת זו עד שתפרסם."
+                  : "כך נראה הכרטיס בשבצ״ק (לפי הנתונים השמורים)."}
+              </p>
+              <ShiftBoardShiftCards
+                shifts={[previewShiftNested]}
+                constraintMap={previewConstraintMap}
+                preview
+                onOpenContact={(p) => {
+                  setPreviewContact(p);
+                  setPreviewDialogOpen(true);
+                }}
+              />
+            </div>
+          )}
+
           {selectedShift && editMeta && (
             <div className="space-y-4 rounded-lg border border-border/60 bg-muted/20 p-4">
               <p className="text-sm font-semibold">עריכת פרטי המשמרת</p>
@@ -786,22 +888,12 @@ export function AdminDashboard() {
               </p>
               <div className="grid gap-4 sm:grid-cols-2">
                 <div className="grid gap-2 sm:col-span-2">
-                  <Label htmlFor="ed-date">תאריך (YYYY-MM-DD)</Label>
-                  <div
-                    dir="ltr"
-                    lang="en"
-                    className="w-full min-w-0 isolate [unicode-bidi:isolate]"
-                  >
-                    <Input
-                      id="ed-date"
-                      type="date"
-                      className="w-full text-left font-mono"
-                      value={editMeta.shift_date}
-                      onChange={(e) =>
-                        setEditMeta((m) => (m ? { ...m, shift_date: e.target.value } : m))
-                      }
-                    />
-                  </div>
+                  <Label>תאריך</Label>
+                  <YmdDateInputs
+                    idPrefix="ed"
+                    value={editMeta.shift_date}
+                    onChange={(v) => setEditMeta((m) => (m ? { ...m, shift_date: v } : m))}
+                  />
                 </div>
                 <div className="grid gap-2">
                   <Label>סוג</Label>
@@ -823,15 +915,29 @@ export function AdminDashboard() {
                   </Select>
                 </div>
                 <div className="grid gap-2">
-                  <Label htmlFor="ed-time">שעת התחלה</Label>
+                  <Label htmlFor="ed-time-start">שעת התחלה</Label>
                   <div dir="ltr" lang="en" className="isolate [unicode-bidi:isolate]">
                     <Input
-                      id="ed-time"
+                      id="ed-time-start"
                       type="time"
                       className="text-left font-mono"
                       value={editMeta.start_time}
                       onChange={(e) =>
                         setEditMeta((m) => (m ? { ...m, start_time: e.target.value } : m))
+                      }
+                    />
+                  </div>
+                </div>
+                <div className="grid gap-2">
+                  <Label htmlFor="ed-time-end">שעת סיום</Label>
+                  <div dir="ltr" lang="en" className="isolate [unicode-bidi:isolate]">
+                    <Input
+                      id="ed-time-end"
+                      type="time"
+                      className="text-left font-mono"
+                      value={editMeta.end_time}
+                      onChange={(e) =>
+                        setEditMeta((m) => (m ? { ...m, end_time: e.target.value } : m))
                       }
                     />
                   </div>
@@ -943,6 +1049,12 @@ export function AdminDashboard() {
               </Button>
             </div>
           )}
+
+          <SoldierContactDialog
+            profile={previewContact}
+            open={previewDialogOpen}
+            onOpenChange={setPreviewDialogOpen}
+          />
         </CardContent>
       </Card>
           </TabsContent>

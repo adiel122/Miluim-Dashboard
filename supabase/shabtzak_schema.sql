@@ -74,11 +74,15 @@ create table if not exists public.shifts (
   shift_type public.shift_type not null,
   mission_name text not null default 'כוננות לאתרי הרס',
   start_time time not null,
+  end_time time not null default '16:00:00',
+  is_published boolean not null default true,
   created_at timestamptz not null default now()
 );
 -- אין ייחודיות על (תאריך, סוג, שעה) — מותרות כמה משמרות מקבילות / חופפות
 
 -- מבנה צוותים לכל משמרת: הרץ supabase/shifts_team_positions.sql אחרי הקובץ הזה
+-- שעת סיום לטבלאות ישנות בלי end_time: הרץ supabase/shifts_end_time.sql
+-- טיוטה/פרסום לשבצ״ק: הרץ supabase/shifts_is_published.sql ואז supabase/rls_published_shifts.sql
 -- DB ישן עם אילוץ ייחודי (תאריך+סוג+שעה): הרץ supabase/shifts_drop_datetime_unique.sql
 
 create index if not exists shifts_shift_date_idx on public.shifts (shift_date asc);
@@ -157,7 +161,10 @@ drop policy if exists "shifts_select_authenticated" on public.shifts;
 create policy "shifts_select_authenticated"
   on public.shifts for select
   to authenticated
-  using (true);
+  using (
+    coalesce((select is_admin from public.profiles pr where pr.id = auth.uid()), false) = true
+    or is_published = true
+  );
 
 drop policy if exists "shifts_admin_insert" on public.shifts;
 create policy "shifts_admin_insert"
@@ -182,7 +189,13 @@ drop policy if exists "assignments_select_authenticated" on public.assignments;
 create policy "assignments_select_authenticated"
   on public.assignments for select
   to authenticated
-  using (true);
+  using (
+    coalesce((select is_admin from public.profiles pr where pr.id = auth.uid()), false) = true
+    or exists (
+      select 1 from public.shifts s
+      where s.id = assignments.shift_id and s.is_published = true
+    )
+  );
 
 drop policy if exists "assignments_admin_insert" on public.assignments;
 create policy "assignments_admin_insert"

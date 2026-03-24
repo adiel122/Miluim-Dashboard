@@ -5,7 +5,7 @@ import { useCallback, useEffect, useState } from "react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import type { AssignmentRow, ShiftRow } from "@/lib/types/shabtzak";
 import { SHIFT_TYPE_LABELS } from "@/lib/types/shabtzak";
-import { formatDateDDMMYY, formatTimeDisplay } from "@/src/lib/date-format";
+import { formatDateDDMMYY, formatTimeRange } from "@/src/lib/date-format";
 import { createClient } from "@/src/utils/supabase/client";
 
 type AssignmentNested = AssignmentRow & {
@@ -43,7 +43,8 @@ export function MyShiftsTab() {
           shift_date,
           shift_type,
           mission_name,
-          start_time
+          start_time,
+          end_time
         )
       `
       )
@@ -101,7 +102,7 @@ export function MyShiftsTab() {
             <CardHeader className="pb-2 text-right">
               <CardTitle className="text-base">{s.mission_name}</CardTitle>
               <p className="text-sm text-muted-foreground">
-                {formatDateDDMMYY(s.shift_date)} · {formatTimeDisplay(s.start_time)} ·{" "}
+                {formatDateDDMMYY(s.shift_date)} · {formatTimeRange(s.start_time, s.end_time)} ·{" "}
                 {SHIFT_TYPE_LABELS[s.shift_type]}
               </p>
             </CardHeader>

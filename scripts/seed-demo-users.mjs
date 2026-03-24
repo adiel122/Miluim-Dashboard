@@ -231,6 +231,8 @@ async function seedShiftAndAssignments(seeded) {
         shift_type: "day",
         mission_name: demoMission,
         start_time: "08:00:00",
+        end_time: "16:00:00",
+        is_published: true,
         team_count: 3,
         positions: ["מפקד", "נהג", "מחלץ"],
       })

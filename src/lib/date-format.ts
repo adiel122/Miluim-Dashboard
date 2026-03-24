@@ -13,6 +13,13 @@ export function formatTimeDisplay(t: string): string {
   return `${parts[0]}:${parts[1]}`;
 }
 
+/** טווח שעות לתצוגה (למשל 08:00–16:00) */
+export function formatTimeRange(start: string, end?: string | null): string {
+  const a = formatTimeDisplay(start);
+  if (end == null || end === "") return a;
+  return `${a}–${formatTimeDisplay(end)}`;
+}
+
 /** ערך ל־input type="time" ממחרוזת SQL */
 export function timeInputValue(t: string | null | undefined): string {
   if (!t) return "";

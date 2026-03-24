@@ -22,6 +22,10 @@ export type ShiftRow = {
   shift_type: ShiftType;
   mission_name: string;
   start_time: string;
+  /** אחרי מיגרציה shifts_end_time.sql */
+  end_time?: string | null;
+  /** false = טיוטה — לא בשבצ״ק ציבורי עד פרסום */
+  is_published?: boolean;
   /** אחרי מיגרציה shifts_team_positions.sql */
   team_count?: number;
   positions?: string[] | null;

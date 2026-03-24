@@ -15,14 +15,21 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import type { ShiftRow } from "@/lib/types/shabtzak";
 import { SHIFT_TYPE_LABELS } from "@/lib/types/shabtzak";
-import { formatDateDDMMYY, formatTimeDisplay } from "@/src/lib/date-format";
+import { formatDateDDMMYY, formatTimeRange } from "@/src/lib/date-format";
 import { cn } from "@/lib/utils";
 
 const NONE = "__none__";
 
 type ShiftOption = Pick<
   ShiftRow,
-  "id" | "shift_date" | "shift_type" | "mission_name" | "start_time" | "team_count"
+  | "id"
+  | "shift_date"
+  | "shift_type"
+  | "mission_name"
+  | "start_time"
+  | "end_time"
+  | "team_count"
+  | "is_published"
 >;
 
 type ShiftSearchSelectProps = {
@@ -40,7 +47,9 @@ function shiftLine(s: ShiftOption) {
     typeof s.team_count === "number" && s.team_count > 0
       ? ` · ${s.team_count} צוותים`
       : "";
-  return `${formatDateDDMMYY(s.shift_date)} · ${formatTimeDisplay(s.start_time)} · ${SHIFT_TYPE_LABELS[s.shift_type]} · ${s.mission_name}${teams}`;
+  const draft = s.is_published === false ? " · טיוטה" : "";
+  const times = formatTimeRange(s.start_time, s.end_time);
+  return `${formatDateDDMMYY(s.shift_date)} · ${times} · ${SHIFT_TYPE_LABELS[s.shift_type]} · ${s.mission_name}${teams}${draft}`;
 }
 
 export function ShiftSearchSelect({

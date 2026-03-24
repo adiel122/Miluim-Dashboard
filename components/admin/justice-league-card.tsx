@@ -36,6 +36,7 @@ type ShiftMini = {
   shift_type: ShiftType;
   mission_name: string;
   start_time: string;
+  end_time: string | null;
 };
 
 type RawAssignment = {
@@ -45,6 +46,7 @@ type RawAssignment = {
   shift_type: ShiftType;
   mission_name: string;
   start_time: string;
+  end_time: string | null;
 };
 
 type StatsRow = {
@@ -337,7 +339,7 @@ export function JusticeLeagueCard({ profiles, profileLabel }: JusticeLeagueCardP
     const supabase = createClient();
     const { data: shifts, error: shErr } = await supabase
       .from("shifts")
-      .select("id, shift_date, shift_type, mission_name, start_time")
+      .select("id, shift_date, shift_type, mission_name, start_time, end_time")
       .gte("shift_date", from)
       .lte("shift_date", to);
 
@@ -374,6 +376,7 @@ export function JusticeLeagueCard({ profiles, profileLabel }: JusticeLeagueCardP
         shift_type: sh.shift_type,
         mission_name: sh.mission_name,
         start_time: sh.start_time,
+        end_time: sh.end_time ?? null,
       });
     }
     setRawAssignments(raw);

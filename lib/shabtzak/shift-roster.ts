@@ -14,7 +14,6 @@ export function parsePositionsInput(raw: string): string[] {
     .filter((s) => s.length > 0 && s.length <= 48);
 }
 
-/** מבנה מטריצה להצגה — משמרת ספציפית או ברירת מחדל מההגדרה הגלובלית */
 /** מבנה טיוטה מהטופס (לפני שמירה ל-DB) */
 export function layoutFromFormFields(
   teamCountRaw: unknown,
