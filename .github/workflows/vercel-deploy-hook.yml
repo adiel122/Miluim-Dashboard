@@ -1,5 +1,7 @@
 name: Trigger Vercel deploy hook
 
+# Repo secret: VERCEL_DEPLOY_HOOK_URL (create hook under Vercel → Project → Settings → Git).
+
 on:
   push:
     branches:
