@@ -1,5 +1,6 @@
 "use client";
 
+import { EyeIcon, EyeOffIcon } from "lucide-react";
 import { useCallback, useState } from "react";
 import { toast } from "sonner";
 
@@ -37,11 +38,13 @@ export function AdminUsersCard({ profiles, profileLabel, onChanged }: AdminUsers
   const [newPassword, setNewPassword] = useState("");
   const [confirmPassword, setConfirmPassword] = useState("");
   const [passwordBusy, setPasswordBusy] = useState(false);
+  const [showPasswordPreview, setShowPasswordPreview] = useState(false);
 
   const openPasswordDialog = (p: ProfileRow) => {
     setPasswordTarget(p);
     setNewPassword(DEFAULT_REGISTER_PASSWORD);
     setConfirmPassword(DEFAULT_REGISTER_PASSWORD);
+    setShowPasswordPreview(false);
   };
 
   const closePasswordDialog = (open: boolean) => {
@@ -49,6 +52,7 @@ export function AdminUsersCard({ profiles, profileLabel, onChanged }: AdminUsers
       setPasswordTarget(null);
       setNewPassword("");
       setConfirmPassword("");
+      setShowPasswordPreview(false);
     }
   };
 
@@ -164,11 +168,33 @@ export function AdminUsersCard({ profiles, profileLabel, onChanged }: AdminUsers
             </DialogDescription>
           </DialogHeader>
           <div className="grid gap-4 text-right">
+            <div className="flex flex-wrap justify-end gap-2">
+              <Button
+                type="button"
+                variant="outline"
+                size="sm"
+                className="gap-1.5"
+                aria-pressed={showPasswordPreview}
+                onClick={() => setShowPasswordPreview((v) => !v)}
+              >
+                {showPasswordPreview ? (
+                  <>
+                    <EyeOffIcon className="size-4 shrink-0" aria-hidden />
+                    הסתר סיסמה
+                  </>
+                ) : (
+                  <>
+                    <EyeIcon className="size-4 shrink-0" aria-hidden />
+                    הצג סיסמה (תצוגה מקדימה)
+                  </>
+                )}
+              </Button>
+            </div>
             <div className="grid gap-2">
               <Label htmlFor="admin-pw-new">סיסמה חדשה</Label>
               <Input
                 id="admin-pw-new"
-                type="password"
+                type={showPasswordPreview ? "text" : "password"}
                 dir="ltr"
                 className="text-left"
                 value={newPassword}
@@ -180,7 +206,7 @@ export function AdminUsersCard({ profiles, profileLabel, onChanged }: AdminUsers
               <Label htmlFor="admin-pw-confirm">אימות סיסמה</Label>
               <Input
                 id="admin-pw-confirm"
-                type="password"
+                type={showPasswordPreview ? "text" : "password"}
                 dir="ltr"
                 className="text-left"
                 value={confirmPassword}
