@@ -12,8 +12,8 @@ const rubik = Rubik({
 });
 
 export const metadata: Metadata = {
-  title: "מילואים סיפוח",
-  description: "לוח התאמות בין מילואימניקים ליחידות",
+  title: "שבצ״ק פלוגה א גדוד 794",
+  description: "שבצ״ק וניהול משמרות",
 };
 
 export default function RootLayout({

@@ -1,64 +1,32 @@
 import Link from "next/link";
 
-import { ListingSubmissionForm } from "@/components/forms/listing-submission-form";
 import { buttonVariants } from "@/components/ui/button-variants";
 import { cn } from "@/lib/utils";
 
 export default function HomePage() {
   return (
-    <div className="min-h-screen bg-background">
-      <header className="border-b border-border/80 bg-card/40 backdrop-blur-sm">
-        <div className="mx-auto flex max-w-5xl flex-wrap items-center justify-between gap-4 px-4 py-4 sm:px-6">
-          <div className="text-right">
-            <p className="text-lg font-semibold tracking-tight">מילואים סיפוח</p>
-            <p className="text-sm text-muted-foreground">
-              לוח מודעות למילואימניקים וליחידות
-            </p>
-          </div>
-          <nav className="flex flex-wrap items-center gap-2">
-            <Link
-              href="/"
-              className={cn(buttonVariants({ variant: "outline", size: "sm" }))}
-            >
-              בית
-            </Link>
-            <Link
-              href="/register"
-              className={cn(buttonVariants({ variant: "secondary", size: "sm" }))}
-            >
-              הרשמה
-            </Link>
-            <Link
-              href="/shabtzak"
-              className={cn(buttonVariants({ variant: "ghost", size: "sm" }))}
-            >
-              שבצ״ק
-            </Link>
-            <Link
-              href="/admin"
-              className={cn(buttonVariants({ variant: "ghost", size: "sm" }))}
-            >
-              ניהול
-            </Link>
-          </nav>
-        </div>
-      </header>
+    <div className="flex min-h-screen flex-col items-center justify-center gap-10 bg-background px-4 py-12 text-center">
+      <h1 className="max-w-2xl text-balance text-3xl font-semibold tracking-tight text-foreground sm:text-4xl">
+        שבצ״ק פלוגה א גדוד 794
+      </h1>
 
-      <main className="mx-auto max-w-5xl space-y-12 px-4 py-10 sm:px-6">
-        <section className="text-right">
-          <h1 className="text-balance text-3xl font-semibold sm:text-4xl">
-            מצאו יחידה או מילואימניק מתאים
-          </h1>
-          <p className="mt-3 max-w-2xl text-pretty text-muted-foreground sm:text-lg">
-            כאן יוצגו מודעות מאושרות, חיפוש וסינון לפי מקצוע, מיקום ודרגה — בשלב הבא.
-            להלן טופס הגדרה עם אימות Zod לפרופיל ולמודעה.
-          </p>
-        </section>
-
-        <section className="flex justify-center sm:justify-end">
-          <ListingSubmissionForm />
-        </section>
-      </main>
+      <nav className="flex flex-wrap items-center justify-center gap-4">
+        <Link
+          href="/shabtzak"
+          className={cn(buttonVariants({ size: "lg" }), "min-w-[10rem]")}
+        >
+          שבצ״ק
+        </Link>
+        <Link
+          href="/admin"
+          className={cn(
+            buttonVariants({ variant: "secondary", size: "lg" }),
+            "min-w-[10rem]"
+          )}
+        >
+          ניהול
+        </Link>
+      </nav>
     </div>
   );
 }
