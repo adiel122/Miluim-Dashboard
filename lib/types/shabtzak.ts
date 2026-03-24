@@ -1,6 +1,7 @@
 export type ShiftType = "day" | "night";
 
-export type AssignmentPosition = "מפקד" | "נהג" | "מחלץ";
+/** תפקיד במשבצת — מחרוזת חופשית לפי הגדרות אדמין (ברירת מחדל היסטורית) */
+export type AssignmentPosition = string;
 
 export type ProfileRow = {
   id: string;
@@ -29,7 +30,9 @@ export type AssignmentRow = {
   position: AssignmentPosition;
 };
 
-export const POSITION_LABELS: Record<AssignmentPosition, string> = {
+export const DEFAULT_ROSTER_POSITIONS: AssignmentPosition[] = ["מפקד", "נהג", "מחלץ"];
+
+export const POSITION_LABELS: Record<string, string> = {
   מפקד: "מפקד",
   נהג: "נהג",
   מחלץ: "מחלץ",

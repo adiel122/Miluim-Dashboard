@@ -23,6 +23,8 @@ type ProfileSearchSelectProps = {
   noneValue: string;
   profileLabel: (p: ProfileRow) => string;
   hasConstraint: (id: string) => boolean;
+  /** כפילות / שגיאת טרום-שמירה */
+  invalid?: boolean;
   id?: string;
   className?: string;
 };
@@ -36,6 +38,7 @@ export function ProfileSearchSelect({
   noneValue,
   profileLabel,
   hasConstraint,
+  invalid,
   id,
   className,
 }: ProfileSearchSelectProps) {
@@ -178,7 +181,10 @@ export function ProfileSearchSelect({
         type="button"
         variant="outline"
         id={id}
-        className="h-auto min-h-9 w-full min-w-0 justify-between gap-2 px-2 py-1.5 font-normal"
+        className={cn(
+          "h-auto min-h-9 w-full min-w-0 justify-between gap-2 px-2 py-1.5 font-normal",
+          invalid && "ring-2 ring-destructive border-destructive"
+        )}
         aria-expanded={open}
         aria-haspopup="listbox"
         onClick={() => {

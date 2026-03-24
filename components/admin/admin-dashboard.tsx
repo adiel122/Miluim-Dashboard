@@ -2,11 +2,17 @@
 
 import { zodResolver } from "@hookform/resolvers/zod";
 import Link from "next/link";
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import { useForm } from "react-hook-form";
 import { AlertTriangleIcon } from "lucide-react";
 import { toast } from "sonner";
 
+import { AfterHoursCard } from "@/components/admin/after-hours-card";
+import { AdminUsersCard } from "@/components/admin/admin-users-card";
+import { JusticeLeagueCard } from "@/components/admin/justice-league-card";
+import { ProfileSearchSelect } from "@/components/admin/profile-search-select";
+import { RosterLayoutCard } from "@/components/admin/roster-layout-card";
+import { ShiftSearchSelect } from "@/components/admin/shift-search-select";
 import { Button } from "@/components/ui/button";
 import { buttonVariants } from "@/components/ui/button-variants";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
@@ -19,38 +25,39 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import {
-  Table,
-  TableBody,
-  TableCell,
-  TableHead,
-  TableHeader,
-  TableRow,
-} from "@/components/ui/table";
-import { ProfileSearchSelect } from "@/components/admin/profile-search-select";
-import { ShiftSearchSelect } from "@/components/admin/shift-search-select";
-import type { AssignmentPosition, ProfileRow, ShiftRow } from "@/lib/types/shabtzak";
-import { SHIFT_TYPE_LABELS } from "@/lib/types/shabtzak";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { isMissingRelationError } from "@/lib/supabase/relation-error";
+import type { ProfileRow, ShiftRow } from "@/lib/types/shabtzak";
+import { DEFAULT_ROSTER_POSITIONS, SHIFT_TYPE_LABELS } from "@/lib/types/shabtzak";
 import { shiftCreateSchema, type ShiftCreateValues } from "@/lib/validations/shift";
 import { createClient } from "@/src/utils/supabase/client";
 
-const POSITIONS: AssignmentPosition[] = ["מפקד", "נהג", "מחלץ"];
-const TEAMS = [1, 2, 3] as const;
 const NONE = "__none__";
 
 type ShiftListRow = ShiftRow & {
   assignments?: { profile_id: string; team_number: number; position: string }[];
 };
 
-type MatrixKey = `${number}-${AssignmentPosition}`;
+type RosterState = {
+  team_count: number;
+  positions: string[];
+};
+
+function matrixKey(team: number, pos: string) {
+  return `${team}-${pos}`;
+}
 
 export function AdminDashboard() {
   const [upcomingShifts, setUpcomingShifts] = useState(0);
-  const [pendingConstraints, setPendingConstraints] = useState(0);
+  const [afterHoursCount, setAfterHoursCount] = useState(0);
   const [shifts, setShifts] = useState<ShiftListRow[]>([]);
   const [profiles, setProfiles] = useState<ProfileRow[]>([]);
+  const [roster, setRoster] = useState<RosterState>({
+    team_count: 3,
+    positions: [...DEFAULT_ROSTER_POSITIONS],
+  });
   const [selectedShiftId, setSelectedShiftId] = useState<string>("");
-  const [matrix, setMatrix] = useState<Partial<Record<MatrixKey, string>>>({});
+  const [matrix, setMatrix] = useState<Record<string, string | undefined>>({});
   const [constraintIds, setConstraintIds] = useState<Set<string>>(new Set());
   const [loadingMeta, setLoadingMeta] = useState(true);
 
@@ -66,6 +73,45 @@ export function AdminDashboard() {
 
   const today = new Date().toISOString().slice(0, 10);
 
+  const teamIndices = useMemo(
+    () => Array.from({ length: roster.team_count }, (_, i) => i + 1),
+    [roster.team_count]
+  );
+
+  const duplicateProfileIds = useMemo(() => {
+    const counts = new Map<string, number>();
+    for (const team of teamIndices) {
+      for (const pos of roster.positions) {
+        const pid = matrix[matrixKey(team, pos)];
+        if (pid && pid !== NONE) {
+          counts.set(pid, (counts.get(pid) ?? 0) + 1);
+        }
+      }
+    }
+    return new Set(
+      Array.from(counts.entries())
+        .filter(([, n]) => n > 1)
+        .map(([id]) => id)
+    );
+  }, [matrix, roster.positions, teamIndices]);
+
+  const loadRoster = useCallback(async () => {
+    const supabase = createClient();
+    const { data, error } = await supabase
+      .from("admin_roster_settings")
+      .select("team_count, positions")
+      .eq("id", 1)
+      .maybeSingle();
+    if (error || !data) return;
+    const pos =
+      (data.positions as string[])?.filter((p) => p.trim().length > 0) ??
+      [...DEFAULT_ROSTER_POSITIONS];
+    setRoster({
+      team_count: Math.min(15, Math.max(1, Number(data.team_count) || 3)),
+      positions: pos.length > 0 ? pos : [...DEFAULT_ROSTER_POSITIONS],
+    });
+  }, []);
+
   const loadSummary = useCallback(async () => {
     const supabase = createClient();
     const { count: sc } = await supabase
@@ -73,13 +119,12 @@ export function AdminDashboard() {
       .select("*", { count: "exact", head: true })
       .gte("shift_date", today);
 
-    const { count: cc } = await supabase
-      .from("profile_constraints")
-      .select("*", { count: "exact", head: true })
-      .gte("constraint_date", today);
+    const { count: ah, error: ahErr } = await supabase
+      .from("after_hours_outings")
+      .select("*", { count: "exact", head: true });
 
     setUpcomingShifts(sc ?? 0);
-    setPendingConstraints(cc ?? 0);
+    setAfterHoursCount(ahErr && isMissingRelationError(ahErr) ? 0 : (ah ?? 0));
   }, [today]);
 
   const loadShifts = useCallback(async () => {
@@ -115,9 +160,9 @@ export function AdminDashboard() {
 
   const refreshAll = useCallback(async () => {
     setLoadingMeta(true);
-    await Promise.all([loadSummary(), loadShifts(), loadProfiles()]);
+    await Promise.all([loadSummary(), loadShifts(), loadProfiles(), loadRoster()]);
     setLoadingMeta(false);
-  }, [loadProfiles, loadShifts, loadSummary]);
+  }, [loadProfiles, loadRoster, loadShifts, loadSummary]);
 
   useEffect(() => {
     void refreshAll();
@@ -132,10 +177,9 @@ export function AdminDashboard() {
       return;
     }
 
-    const m: Partial<Record<MatrixKey, string>> = {};
+    const m: Record<string, string | undefined> = {};
     for (const a of selectedShift.assignments ?? []) {
-      const key = `${a.team_number}-${a.position}` as MatrixKey;
-      m[key] = a.profile_id;
+      m[matrixKey(a.team_number, a.position)] = a.profile_id;
     }
     setMatrix(m);
 
@@ -186,6 +230,11 @@ export function AdminDashboard() {
       toast.error("בחר משמרת");
       return;
     }
+    if (duplicateProfileIds.size > 0) {
+      toast.error("אותו חייל מסומן ביותר ממשבצת אחת — תקן לפני שמירה");
+      return;
+    }
+
     const supabase = createClient();
     const { error: delErr } = await supabase
       .from("assignments")
@@ -200,19 +249,18 @@ export function AdminDashboard() {
       shift_id: string;
       profile_id: string;
       team_number: number;
-      position: AssignmentPosition;
+      position: string;
     }[] = [];
 
-    for (const team of TEAMS) {
-      for (const pos of POSITIONS) {
-        const key = `${team}-${pos}` as MatrixKey;
-        const pid = matrix[key];
+    for (const team of teamIndices) {
+      for (const pos of roster.positions) {
+        const pid = matrix[matrixKey(team, pos)];
         if (pid && pid !== NONE) {
           rows.push({
             shift_id: selectedShiftId,
             profile_id: pid,
             team_number: team,
-            position: pos,
+            position: pos.trim(),
           });
         }
       }
@@ -231,23 +279,8 @@ export function AdminDashboard() {
     await loadSummary();
   };
 
-  const toggleAdmin = async (p: ProfileRow, next: boolean) => {
-    const supabase = createClient();
-    const { error } = await supabase.from("profiles").update({ is_admin: next }).eq("id", p.id);
-    if (error) {
-      toast.error(error.message);
-      return;
-    }
-    toast.success("הרשאות עודכנו");
-    await loadProfiles();
-  };
-
-  const setCell = (
-    team: number,
-    pos: AssignmentPosition,
-    profileId: string | null | undefined
-  ) => {
-    const key = `${team}-${pos}` as MatrixKey;
+  const setCell = (team: number, pos: string, profileId: string | null | undefined) => {
+    const key = matrixKey(team, pos);
     const v =
       profileId == null || profileId === NONE ? undefined : profileId;
     setMatrix((prev) => ({ ...prev, [key]: v }));
@@ -258,7 +291,9 @@ export function AdminDashboard() {
       <header className="flex flex-wrap items-center justify-between gap-3">
         <div>
           <h1 className="text-2xl font-semibold">לוח ניהול</h1>
-          <p className="text-sm text-muted-foreground">שבצ״ק — משמרות, שיבוצים ומשתמשים</p>
+          <p className="text-sm text-muted-foreground">
+            ניהול משמרות ושיבוצים — ליגת הצדק, אפטר ומשתמשים בטאבים נפרדים
+          </p>
         </div>
         <Link href="/shabtzak" className={buttonVariants({ variant: "outline", size: "sm" })}>
           לשבצ״ק
@@ -268,29 +303,52 @@ export function AdminDashboard() {
       {loadingMeta ? (
         <p className="text-muted-foreground">טוען…</p>
       ) : (
-        <div className="grid gap-4 sm:grid-cols-2">
-          <Card>
-            <CardHeader className="pb-2">
-              <CardTitle className="text-base">משמרות קרובות</CardTitle>
-              <CardDescription>מתאריך היום ואילך</CardDescription>
-            </CardHeader>
-            <CardContent>
-              <p className="text-3xl font-semibold tabular-nums">{upcomingShifts}</p>
-            </CardContent>
-          </Card>
-          <Card>
-            <CardHeader className="pb-2">
-              <CardTitle className="text-base">אילוצים פעילים</CardTitle>
-              <CardDescription>רישומי אילוץ עם תאריך עתידי</CardDescription>
-            </CardHeader>
-            <CardContent>
-              <p className="text-3xl font-semibold tabular-nums">{pendingConstraints}</p>
-            </CardContent>
-          </Card>
-        </div>
-      )}
+        <Tabs defaultValue="shifts" className="w-full min-w-0">
+          <TabsList className="grid h-auto w-full grid-cols-2 gap-1 p-1 sm:grid-cols-4">
+            <TabsTrigger value="shifts" className="text-xs sm:text-sm">
+              לוח שיבוצים
+            </TabsTrigger>
+            <TabsTrigger value="justice" className="text-xs sm:text-sm">
+              ליגת הצדק
+            </TabsTrigger>
+            <TabsTrigger value="after" className="text-xs sm:text-sm">
+              אפטר
+            </TabsTrigger>
+            <TabsTrigger value="users" className="text-xs sm:text-sm">
+              משתמשים
+            </TabsTrigger>
+          </TabsList>
 
-      <Card>
+          <TabsContent value="shifts" className="mt-6 space-y-8">
+            <div className="grid gap-4 sm:grid-cols-2">
+              <Card>
+                <CardHeader className="pb-2">
+                  <CardTitle className="text-base">משמרות קרובות</CardTitle>
+                  <CardDescription>מתאריך היום ואילך</CardDescription>
+                </CardHeader>
+                <CardContent>
+                  <p className="text-3xl font-semibold tabular-nums">{upcomingShifts}</p>
+                </CardContent>
+              </Card>
+              <Card>
+                <CardHeader className="pb-2">
+                  <CardTitle className="text-base">רישומי אפטר</CardTitle>
+                  <CardDescription>סה״כ רישומים במערכת</CardDescription>
+                </CardHeader>
+                <CardContent>
+                  <p className="text-3xl font-semibold tabular-nums">{afterHoursCount}</p>
+                </CardContent>
+              </Card>
+            </div>
+
+            <RosterLayoutCard
+              onSaved={(layout) => {
+                setRoster(layout);
+                void loadShifts();
+              }}
+            />
+
+            <Card>
         <CardHeader>
           <CardTitle>יצירת משמרת</CardTitle>
           <CardDescription>תאריך, סוג (יום / לילה), משימה ושעת התחלה</CardDescription>
@@ -355,7 +413,9 @@ export function AdminDashboard() {
       <Card className="overflow-visible">
         <CardHeader>
           <CardTitle>מטריצת שיבוצים</CardTitle>
-          <CardDescription>בחר משמרת, משבצים לפי צוות ותפקיד</CardDescription>
+          <CardDescription>
+            לפי מבנה הצוותים והתפקידים שהגדרת למעלה. כפילות חייל מסומנת באדום לפני שמירה
+          </CardDescription>
         </CardHeader>
         <CardContent className="space-y-4 overflow-visible">
           <div className="grid min-w-0 gap-2">
@@ -367,19 +427,32 @@ export function AdminDashboard() {
             />
           </div>
 
+          {duplicateProfileIds.size > 0 && (
+            <p className="rounded-md border border-destructive/50 bg-destructive/10 px-3 py-2 text-sm text-destructive">
+              יש חיילים שמופיעים יותר מפעם אחת במשמרת — יש לתקן לפני שמירה.
+            </p>
+          )}
+
           {selectedShift && (
             <div className="space-y-4 rounded-lg border border-border/60 p-4">
-              {TEAMS.map((team) => (
-                <div key={team} className="space-y-3 border-b border-border/40 pb-4 last:border-0 last:pb-0">
+              {teamIndices.map((team) => (
+                <div
+                  key={team}
+                  className="space-y-3 border-b border-border/40 pb-4 last:border-0 last:pb-0"
+                >
                   <p className="font-medium text-muted-foreground">צוות {team}</p>
-                  <div className="grid min-w-0 gap-3 sm:grid-cols-3">
-                    {POSITIONS.map((pos) => {
-                      const key = `${team}-${pos}` as MatrixKey;
+                  <div
+                    className={cnGridForPositions(roster.positions.length)}
+                  >
+                    {roster.positions.map((pos) => {
+                      const key = matrixKey(team, pos);
                       const val = matrix[key] ?? NONE;
                       const conflict =
                         val !== NONE && constraintIds.has(val);
+                      const dup =
+                        val !== NONE && duplicateProfileIds.has(val);
                       return (
-                        <div key={pos} className="grid min-w-0 gap-2">
+                        <div key={key} className="grid min-w-0 gap-2">
                           <Label className="flex items-center justify-end gap-1.5 text-xs">
                             {pos}
                             {conflict && (
@@ -396,6 +469,7 @@ export function AdminDashboard() {
                             noneValue={NONE}
                             profileLabel={profileLabel}
                             hasConstraint={(id) => constraintIds.has(id)}
+                            invalid={dup}
                           />
                         </div>
                       );
@@ -403,54 +477,48 @@ export function AdminDashboard() {
                   </div>
                 </div>
               ))}
-              <Button type="button" onClick={() => void saveMatrix()}>
+              <Button
+                type="button"
+                disabled={duplicateProfileIds.size > 0}
+                onClick={() => void saveMatrix()}
+              >
                 שמור שיבוצים
               </Button>
             </div>
           )}
         </CardContent>
       </Card>
+          </TabsContent>
 
-      <Card>
-        <CardHeader>
-          <CardTitle>ניהול משתמשים</CardTitle>
-          <CardDescription>עריכת הרשאת מנהל</CardDescription>
-        </CardHeader>
-        <CardContent className="overflow-x-auto">
-          <Table dir="rtl">
-            <TableHeader>
-              <TableRow>
-                <TableHead className="text-right">שם</TableHead>
-                <TableHead className="text-right">מספר אישי</TableHead>
-                <TableHead className="text-right">טלפון</TableHead>
-                <TableHead className="text-right">מנהל</TableHead>
-              </TableRow>
-            </TableHeader>
-            <TableBody>
-              {profiles.map((p) => (
-                <TableRow key={p.id}>
-                  <TableCell className="font-medium">{profileLabel(p)}</TableCell>
-                  <TableCell dir="ltr" className="text-left">
-                    {p.military_id ?? "—"}
-                  </TableCell>
-                  <TableCell dir="ltr" className="text-left">
-                    {p.phone ?? "—"}
-                  </TableCell>
-                  <TableCell>
-                    <input
-                      type="checkbox"
-                      className="size-4 rounded border-input"
-                      checked={p.is_admin}
-                      onChange={(e) => void toggleAdmin(p, e.target.checked)}
-                      aria-label="מנהל"
-                    />
-                  </TableCell>
-                </TableRow>
-              ))}
-            </TableBody>
-          </Table>
-        </CardContent>
-      </Card>
+          <TabsContent value="justice" className="mt-6 w-full min-w-0">
+            <JusticeLeagueCard profiles={profiles} profileLabel={profileLabel} />
+          </TabsContent>
+
+          <TabsContent value="after" className="mt-6 w-full min-w-0">
+            <AfterHoursCard
+              profiles={profiles}
+              profileLabel={profileLabel}
+              onMutate={() => void loadSummary()}
+            />
+          </TabsContent>
+
+          <TabsContent value="users" className="mt-6 w-full min-w-0">
+            <AdminUsersCard
+              profiles={profiles}
+              profileLabel={profileLabel}
+              onChanged={() => void loadProfiles()}
+            />
+          </TabsContent>
+        </Tabs>
+      )}
     </div>
   );
+}
+
+function cnGridForPositions(n: number) {
+  if (n <= 1) return "grid min-w-0 gap-3 grid-cols-1";
+  if (n === 2) return "grid min-w-0 gap-3 sm:grid-cols-2";
+  if (n === 3) return "grid min-w-0 gap-3 sm:grid-cols-3";
+  if (n === 4) return "grid min-w-0 gap-3 sm:grid-cols-2 lg:grid-cols-4";
+  return "grid min-w-0 gap-3 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4";
 }

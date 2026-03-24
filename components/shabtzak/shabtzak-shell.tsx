@@ -8,7 +8,6 @@ import { buttonVariants } from "@/components/ui/button-variants";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { createClient } from "@/src/utils/supabase/client";
 
-import { ConstraintsTab } from "./constraints-tab";
 import { MyShiftsTab } from "./my-shifts-tab";
 import { ShiftBoardTab } from "./shift-board-tab";
 
@@ -49,15 +48,12 @@ export function ShabtzakShell({ isAdmin }: ShabtzakShellProps) {
 
       <main className="mx-auto w-full max-w-5xl px-4 py-6">
         <Tabs defaultValue="board" className="w-full min-w-0">
-          <TabsList className="grid h-auto w-full grid-cols-3 gap-1 p-1">
+          <TabsList className="grid h-auto w-full grid-cols-2 gap-1 p-1">
             <TabsTrigger value="board" className="text-xs sm:text-sm">
               שבצ״ק
             </TabsTrigger>
             <TabsTrigger value="mine" className="text-xs sm:text-sm">
               המשמרות שלי
-            </TabsTrigger>
-            <TabsTrigger value="constraints" className="text-xs sm:text-sm">
-              אילוצים
             </TabsTrigger>
           </TabsList>
           <TabsContent value="board" className="mt-6 w-full min-w-0">
@@ -65,9 +61,6 @@ export function ShabtzakShell({ isAdmin }: ShabtzakShellProps) {
           </TabsContent>
           <TabsContent value="mine" className="mt-6 w-full min-w-0">
             <MyShiftsTab />
-          </TabsContent>
-          <TabsContent value="constraints" className="mt-6 w-full min-w-0">
-            <ConstraintsTab />
           </TabsContent>
         </Tabs>
       </main>

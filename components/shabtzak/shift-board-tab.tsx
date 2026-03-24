@@ -1,13 +1,16 @@
 "use client";
 
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import { AlertTriangleIcon } from "lucide-react";
 
 import { Badge } from "@/components/ui/badge";
+import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
 import { cn } from "@/lib/utils";
-import type { AssignmentPosition, AssignmentRow, ProfileRow, ShiftRow } from "@/lib/types/shabtzak";
-import { SHIFT_TYPE_LABELS } from "@/lib/types/shabtzak";
+import type { AssignmentRow, ProfileRow, ShiftRow } from "@/lib/types/shabtzak";
+import { DEFAULT_ROSTER_POSITIONS, SHIFT_TYPE_LABELS } from "@/lib/types/shabtzak";
 import { formatDateDDMMYY, formatTimeDisplay } from "@/src/lib/date-format";
 import { createClient } from "@/src/utils/supabase/client";
 
@@ -16,19 +19,64 @@ import { SoldierContactDialog } from "./soldier-contact-dialog";
 type AssignmentNested = AssignmentRow & { profiles: ProfileRow | null };
 type ShiftNested = ShiftRow & { assignments: AssignmentNested[] };
 
-const POSITIONS: AssignmentPosition[] = ["מפקד", "נהג", "מחלץ"];
-const TEAMS = [1, 2, 3] as const;
+type RosterShape = {
+  team_count: number;
+  positions: string[];
+};
+
+function teamsForShift(shift: ShiftNested, teamCount: number): number[] {
+  const s = new Set<number>();
+  for (let t = 1; t <= teamCount; t++) s.add(t);
+  for (const a of shift.assignments ?? []) s.add(a.team_number);
+  return Array.from(s).sort((a, b) => a - b);
+}
+
+function positionsForShift(shift: ShiftNested, template: string[]): string[] {
+  const fromAssign = new Set((shift.assignments ?? []).map((a) => a.position));
+  const ordered: string[] = [...template];
+  for (const p of Array.from(fromAssign)) {
+    if (!ordered.includes(p)) ordered.push(p);
+  }
+  return ordered;
+}
+
+function todayYmd() {
+  return new Date().toISOString().slice(0, 10);
+}
 
 export function ShiftBoardTab() {
+  const [selectedDate, setSelectedDate] = useState(todayYmd);
   const [shifts, setShifts] = useState<ShiftNested[]>([]);
   const [constraintMap, setConstraintMap] = useState<Record<string, Set<string>>>({});
+  const [roster, setRoster] = useState<RosterShape>({
+    team_count: 3,
+    positions: [...DEFAULT_ROSTER_POSITIONS],
+  });
   const [loading, setLoading] = useState(true);
   const [contact, setContact] = useState<ProfileRow | null>(null);
   const [dialogOpen, setDialogOpen] = useState(false);
 
   const load = useCallback(async () => {
+    setLoading(true);
     const supabase = createClient();
-    const today = new Date().toISOString().slice(0, 10);
+
+    const { data: settings } = await supabase
+      .from("admin_roster_settings")
+      .select("team_count, positions")
+      .eq("id", 1)
+      .maybeSingle();
+
+    if (settings) {
+      const pos =
+        (settings.positions as string[])?.filter((p) => p.trim().length > 0) ?? [
+          ...DEFAULT_ROSTER_POSITIONS,
+        ];
+      setRoster({
+        team_count: Math.min(15, Math.max(1, Number(settings.team_count) || 3)),
+        positions: pos.length > 0 ? pos : [...DEFAULT_ROSTER_POSITIONS],
+      });
+    }
+
     const { data: shiftRows, error } = await supabase
       .from("shifts")
       .select(
@@ -57,8 +105,7 @@ export function ShiftBoardTab() {
         )
       `
       )
-      .gte("shift_date", today)
-      .order("shift_date", { ascending: true })
+      .eq("shift_date", selectedDate)
       .order("start_time", { ascending: true });
 
     if (error || !shiftRows) {
@@ -70,8 +117,7 @@ export function ShiftBoardTab() {
     const nested = shiftRows as unknown as ShiftNested[];
     setShifts(nested);
 
-    const shiftDates = Array.from(new Set(nested.map((s) => s.shift_date)));
-    if (shiftDates.length === 0) {
+    if (nested.length === 0) {
       setConstraintMap({});
       setLoading(false);
       return;
@@ -80,7 +126,7 @@ export function ShiftBoardTab() {
     const { data: cons } = await supabase
       .from("profile_constraints")
       .select("profile_id, constraint_date")
-      .in("constraint_date", shiftDates);
+      .eq("constraint_date", selectedDate);
 
     const map: Record<string, Set<string>> = {};
     for (const row of cons ?? []) {
@@ -90,20 +136,11 @@ export function ShiftBoardTab() {
     }
     setConstraintMap(map);
     setLoading(false);
-  }, []);
+  }, [selectedDate]);
 
   useEffect(() => {
     void load();
   }, [load]);
-
-  const grouped = useMemo(() => {
-    const m = new Map<string, ShiftNested[]>();
-    for (const s of shifts) {
-      if (!m.has(s.shift_date)) m.set(s.shift_date, []);
-      m.get(s.shift_date)!.push(s);
-    }
-    return Array.from(m.entries()).sort(([a], [b]) => a.localeCompare(b));
-  }, [shifts]);
 
   const openContact = (p: ProfileRow | null) => {
     if (!p) return;
@@ -111,28 +148,50 @@ export function ShiftBoardTab() {
     setDialogOpen(true);
   };
 
-  if (loading) {
-    return <p className="py-8 text-center text-muted-foreground">טוען משמרות…</p>;
-  }
-
-  if (grouped.length === 0) {
-    return (
-      <p className="py-8 text-center text-muted-foreground">
-        אין משמרות קרובות בלוח.
-      </p>
-    );
-  }
+  const isToday = selectedDate === todayYmd();
 
   return (
-    <div className="w-full min-w-0 space-y-8">
-      {grouped.map(([dateKey, dayShifts]) => (
-        <section key={dateKey} className="w-full min-w-0 space-y-4">
+    <div className="w-full min-w-0 space-y-6">
+      <div className="flex flex-wrap items-end gap-3 border-b border-border/60 pb-4">
+        <div className="grid min-w-[10rem] flex-1 gap-2 sm:min-w-[12rem] sm:flex-initial">
+          <Label htmlFor="board-date">תאריך בשבצ״ק</Label>
+          <Input
+            id="board-date"
+            type="date"
+            dir="ltr"
+            className="w-full sm:w-auto"
+            value={selectedDate}
+            onChange={(e) => setSelectedDate(e.target.value)}
+          />
+        </div>
+        <Button
+          type="button"
+          variant="outline"
+          size="sm"
+          className="shrink-0"
+          disabled={isToday}
+          onClick={() => setSelectedDate(todayYmd())}
+        >
+          היום
+        </Button>
+      </div>
+
+      {loading ? (
+        <p className="py-8 text-center text-muted-foreground">טוען משמרות…</p>
+      ) : shifts.length === 0 ? (
+        <p className="py-8 text-center text-muted-foreground">
+          אין משמרות לתאריך {formatDateDDMMYY(selectedDate)}.
+        </p>
+      ) : (
+        <section className="w-full min-w-0 space-y-4">
           <h2 className="text-lg font-semibold text-foreground">
-            {formatDateDDMMYY(dateKey)}
+            שבצ״ק ל־{formatDateDDMMYY(selectedDate)}
           </h2>
           <div className="flex w-full min-w-0 flex-col gap-6">
-            {dayShifts.map((shift) => {
+            {shifts.map((shift) => {
               const constrained = constraintMap[shift.shift_date] ?? new Set<string>();
+              const teams = teamsForShift(shift, roster.team_count);
+              const positions = positionsForShift(shift, roster.positions);
               return (
                 <Card
                   key={shift.id}
@@ -155,8 +214,17 @@ export function ShiftBoardTab() {
                     </div>
                   </CardHeader>
                   <CardContent className="w-full min-w-0 text-right">
-                    <div className="grid w-full min-w-0 gap-3 sm:grid-cols-3">
-                      {TEAMS.map((team) => (
+                    <div
+                      className={cn(
+                        "grid w-full min-w-0 gap-3",
+                        teams.length <= 1
+                          ? "sm:grid-cols-1"
+                          : teams.length === 2
+                            ? "sm:grid-cols-2"
+                            : "sm:grid-cols-2 lg:grid-cols-3"
+                      )}
+                    >
+                      {teams.map((team) => (
                         <div
                           key={team}
                           className="min-w-0 rounded-lg border border-border/60 bg-card/60 p-3"
@@ -165,7 +233,7 @@ export function ShiftBoardTab() {
                             צוות {team}
                           </p>
                           <ul className="space-y-2 text-sm">
-                            {POSITIONS.map((pos) => {
+                            {positions.map((pos) => {
                               const a = shift.assignments?.find(
                                 (x) => x.team_number === team && x.position === pos
                               );
@@ -215,7 +283,7 @@ export function ShiftBoardTab() {
             })}
           </div>
         </section>
-      ))}
+      )}
 
       <SoldierContactDialog
         profile={contact}
